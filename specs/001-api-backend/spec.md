@@ -62,7 +62,7 @@ A user logs into the web dashboard to view their screenshot history, organize sc
 
 **Acceptance Scenarios**:
 
-1. **Given** a user with 150 uploaded screenshots, **When** they view their screenshot history, **Then** they see paginated results (50 per page) sorted by newest first with thumbnail previews
+1. **Given** a user with 150 uploaded screenshots, **When** they view their screenshot history, **Then** they see paginated results (50 per page) sorted by newest first
 2. **Given** a user viewing their history, **When** they search for "design mockup", **Then** only screenshots with matching filenames appear in results
 3. **Given** a user, **When** they delete a screenshot, **Then** the screenshot and all associated metadata are permanently removed and the file is deleted from storage
 4. **Given** a free tier user with screenshots older than 30 days, **When** they view their history, **Then** expired screenshots are marked with expiration status and can no longer be accessed via shareable links

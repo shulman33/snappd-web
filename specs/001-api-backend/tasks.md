@@ -29,15 +29,15 @@ description: "Task list for Core API Backend implementation"
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Install core dependencies (next@15.5.5, @supabase/supabase-js, stripe, zod, nanoid)
-- [ ] T002 Install dev dependencies (vitest, @playwright/test, @types/node, typescript@5)
-- [ ] T003 [P] Install rate limiting dependencies (@upstash/ratelimit, @upstash/redis)
-- [ ] T004 [P] Configure TypeScript (tsconfig.json) for Next.js 15 App Router with strict mode
-- [ ] T005 [P] Configure Vitest (vitest.config.ts) for unit tests
-- [ ] T006 [P] Configure Playwright (playwright.config.ts) for contract tests
-- [ ] T007 Create environment variable template (.env.example) with Supabase, Stripe, Vercel KV vars
-- [ ] T008 [P] Create directory structure: src/app/api/, src/lib/, src/types/, tests/
-- [ ] T009 [P] Create .gitignore entries for .env.local, node_modules, .next, coverage
+- [X] T001 Install core dependencies (next@15.5.5, @supabase/supabase-js, stripe, zod, nanoid)
+- [X] T002 Install dev dependencies (vitest, @playwright/test, @types/node, typescript@5)
+- [X] T003 [P] Install rate limiting dependencies (@upstash/ratelimit, @upstash/redis)
+- [X] T004 [P] Configure TypeScript (tsconfig.json) for Next.js 15 App Router with strict mode
+- [X] T005 [P] Configure Vitest (vitest.config.ts) for unit tests
+- [X] T006 [P] Configure Playwright (playwright.config.ts) for contract tests
+- [X] T007 Create environment variable template (.env.example) with Supabase, Stripe, Vercel KV vars
+- [X] T008 [P] Create directory structure: src/app/api/, src/lib/, src/types/, tests/
+- [X] T009 [P] Create .gitignore entries for .env.local, node_modules, .next, coverage
 
 ---
 
@@ -47,19 +47,19 @@ description: "Task list for Core API Backend implementation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T010 Create Supabase client singleton in src/lib/supabase.ts (admin + user contexts)
-- [ ] T011 Create Stripe client in src/lib/stripe.ts with webhook utilities
-- [ ] T012 [P] Create custom error classes in src/lib/errors.ts (ApiError, ValidationError, etc.)
-- [ ] T013 [P] Create Zod validation schemas in src/lib/validation.ts (uploadScreenshot, signup, etc.)
-- [ ] T014 [P] Create rate limiting middleware in src/lib/rate-limit.ts using upstash/ratelimit
-- [ ] T015 [P] Create short ID generator in src/lib/short-id.ts with nanoid + retry logic (3 attempts)
-- [ ] T016 [P] Create storage utilities in src/lib/storage.ts (MIME validation, signed URLs)
-- [ ] T016a [P] Create image optimization utilities in src/lib/storage.ts (WebP conversion at 85% quality, resize if >10MB)
-- [ ] T017 Run Supabase migration in supabase/migrations/20251017000000_initial_schema.sql
-- [ ] T018 Create Supabase Storage bucket 'screenshots' with public read, authenticated write policies
-- [ ] T019 Generate TypeScript database types in src/types/database.ts from Supabase schema
-- [ ] T020 [P] Create Stripe webhook event types in src/types/stripe.ts
-- [ ] T021 [P] Create API request/response types in src/types/api.ts
+- [X] T010 Create Supabase client singleton in src/lib/supabase.ts (admin + user contexts)
+- [X] T011 Create Stripe client in src/lib/stripe.ts with webhook utilities
+- [X] T012 [P] Create custom error classes in src/lib/errors.ts (ApiError, ValidationError, etc.)
+- [X] T013 [P] Create Zod validation schemas in src/lib/validation.ts (uploadScreenshot, signup, etc.)
+- [X] T014 [P] Create rate limiting middleware in src/lib/rate-limit.ts using upstash/ratelimit
+- [X] T015 [P] Create short ID generator in src/lib/short-id.ts with nanoid + retry logic (3 attempts)
+- [X] T016 [P] Create storage utilities in src/lib/storage.ts (MIME validation, signed URLs)
+- [X] T016a [P] Create image optimization utilities in src/lib/storage.ts (WebP conversion at 85% quality, resize if >10MB)
+- [X] T017 Run Supabase migration in supabase/migrations/20251017000000_initial_schema.sql
+- [X] T018 Create Supabase Storage bucket 'screenshots' with public read, authenticated write policies
+- [X] T019 Generate TypeScript database types in src/types/database.ts from Supabase schema
+- [X] T020 [P] Create Stripe webhook event types in src/types/stripe.ts
+- [X] T021 [P] Create API request/response types in src/types/api.ts
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -75,22 +75,22 @@ description: "Task list for Core API Backend implementation"
 
 **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T022 [P] [US1] Contract test for POST /api/upload/signed-url in tests/contract/upload.test.ts
-- [ ] T023 [P] [US1] Contract test for POST /api/screenshots in tests/contract/screenshots-upload.test.ts
+- [X] T022 [P] [US1] Contract test for POST /api/upload/signed-url in tests/contract/upload.test.ts
+- [X] T023 [P] [US1] Contract test for POST /api/screenshots in tests/contract/screenshots-upload.test.ts
 - [ ] T024 [P] [US1] Contract test for GET /api/s/[shortId] in tests/contract/screenshots-public.test.ts
-- [ ] T025 [P] [US1] Unit test for generateUniqueShortId with collision retry in tests/unit/short-id.test.ts
+- [X] T025 [P] [US1] Unit test for generateUniqueShortId with collision retry in tests/unit/short-id.test.ts
 - [ ] T026 [P] [US1] Unit test for MIME type validation in tests/unit/storage.test.ts
 - [ ] T027 [US1] Integration test for full upload-to-share workflow in tests/integration/upload-workflow.test.ts
 
 ### Implementation for User Story 1
 
-- [ ] T028 [US1] Implement POST /api/upload/signed-url route in src/app/api/upload/signed-url/route.ts (with image optimization)
-- [ ] T029 [US1] Implement POST /api/screenshots route in src/app/api/screenshots/route.ts (with monthly limit check)
-- [ ] T030 [US1] Implement GET /api/s/[shortId]/route.ts route for public screenshot viewer (increment views)
-- [ ] T031 [US1] Add short ID collision retry logic to POST /api/screenshots (3 retries)
-- [ ] T032 [US1] Add expiration date calculation in POST /api/screenshots (upload_date + 30 days for free tier)
-- [ ] T033 [US1] Add 410 Gone handling in GET /api/s/[shortId] for expired screenshots
-- [ ] T034 [US1] Add SEO metadata generation (Open Graph tags) in GET /api/s/[shortId]
+- [X] T028 [US1] Implement POST /api/upload/signed-url route in src/app/api/upload/signed-url/route.ts (with image optimization)
+- [X] T029 [US1] Implement POST /api/screenshots route in src/app/api/screenshots/route.ts (with monthly limit check)
+- [X] T030 [US1] Implement GET /api/s/[shortId]/route.ts route for public screenshot viewer (increment views)
+- [X] T031 [US1] Add short ID collision retry logic to POST /api/screenshots (3 retries)
+- [X] T032 [US1] Add expiration date calculation in POST /api/screenshots (upload_date + 30 days for free tier)
+- [X] T033 [US1] Add 410 Gone handling in GET /api/s/[shortId] for expired screenshots
+- [X] T034 [US1] Add SEO metadata generation (Open Graph tags) in GET /api/s/[shortId]
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently (MVP complete!)
 
@@ -115,20 +115,20 @@ description: "Task list for Core API Backend implementation"
 
 ### Implementation for User Story 2
 
-- [ ] T043 [US2] Implement POST /api/auth/signup route in src/app/api/auth/signup/route.ts
-- [ ] T044 [US2] Create profile record on signup (trigger or manual insert) with Stripe customer ID
-- [ ] T045 [US2] Implement GET /api/auth/me route in src/app/api/auth/me/route.ts
-- [ ] T046 [US2] Implement PATCH /api/auth/me route in src/app/api/auth/me/route.ts
-- [ ] T047 [US2] Implement POST /api/billing/checkout route in src/app/api/billing/checkout/route.ts
-- [ ] T048 [US2] Implement GET /api/billing/portal route in src/app/api/billing/portal/route.ts
-- [ ] T049 [US2] Implement POST /api/billing/webhook route in src/app/api/billing/webhook/route.ts
-- [ ] T050 [US2] Add webhook signature verification in POST /api/billing/webhook
-- [ ] T051 [US2] Add idempotency check (stripe_events table) in POST /api/billing/webhook
-- [ ] T052 [US2] Handle subscription.created event (upgrade to pro) in webhook handler
-- [ ] T053 [US2] Handle subscription.updated event (status change) in webhook handler
-- [ ] T054 [US2] Handle subscription.deleted event (downgrade to free with grandfathering) in webhook handler
-- [ ] T055 [US2] Handle invoice.payment_failed event (downgrade after retries) in webhook handler
-- [ ] T056 [US2] Add downgraded_at timestamp update on downgrade for grandfathering logic
+- [X] T043 [US2] Implement POST /api/auth/signup route in src/app/api/auth/signup/route.ts
+- [X] T044 [US2] Create profile record on signup (trigger or manual insert) with Stripe customer ID
+- [X] T045 [US2] Implement GET /api/auth/me route in src/app/api/auth/me/route.ts
+- [X] T046 [US2] Implement PATCH /api/auth/me route in src/app/api/auth/me/route.ts
+- [X] T047 [US2] Implement POST /api/billing/checkout route in src/app/api/billing/checkout/route.ts
+- [X] T048 [US2] Implement GET /api/billing/portal route in src/app/api/billing/portal/route.ts
+- [X] T049 [US2] Implement POST /api/billing/webhook route in src/app/api/billing/webhook/route.ts
+- [X] T050 [US2] Add webhook signature verification in POST /api/billing/webhook
+- [X] T051 [US2] Add idempotency check (stripe_events table) in POST /api/billing/webhook
+- [X] T052 [US2] Handle subscription.created event (upgrade to pro) in webhook handler
+- [X] T053 [US2] Handle subscription.updated event (status change) in webhook handler
+- [X] T054 [US2] Handle subscription.deleted event (downgrade to free with grandfathering) in webhook handler
+- [X] T055 [US2] Handle invoice.payment_failed event (downgrade after retries) in webhook handler
+- [X] T056 [US2] Add downgraded_at timestamp update on downgrade for grandfathering logic
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -152,19 +152,19 @@ description: "Task list for Core API Backend implementation"
 
 ### Implementation for User Story 3
 
-- [ ] T064 [US3] Implement GET /api/screenshots route in src/app/api/screenshots/route.ts with pagination (50/page)
-- [ ] T065 [US3] Add filename search (case-insensitive substring) to GET /api/screenshots
-- [ ] T066 [US3] Add date range filtering (from_date, to_date) to GET /api/screenshots
-- [ ] T067 [US3] Implement GET /api/screenshots/[id]/route.ts for screenshot metadata
-- [ ] T068 [US3] Implement PATCH /api/screenshots/[id]/route.ts for metadata updates (filename, is_public)
-- [ ] T069 [US3] Implement DELETE /api/screenshots/[id]/route.ts for screenshot deletion
-- [ ] T070 [US3] Add Supabase Storage file deletion in DELETE /api/screenshots/[id]
-- [ ] T071 [US3] Implement GET /api/screenshots/[id]/download/route.ts for signed download URLs
-- [ ] T072 [US3] Implement GET /api/usage route in src/app/api/usage/route.ts
-- [ ] T073 [US3] Add monthly limit calculation with grandfathering logic in GET /api/usage
-- [ ] T074 [US3] Add upgrade prompt generation based on usage in GET /api/usage
-- [ ] T075 [US3] Implement GET /api/usage/history route in src/app/api/usage/history/route.ts
-- [ ] T076 [US3] Add aggregate statistics calculation in GET /api/usage/history
+- [X] T064 [US3] Implement GET /api/screenshots route in src/app/api/screenshots/route.ts with pagination (50/page)
+- [X] T065 [US3] Add filename search (case-insensitive substring) to GET /api/screenshots
+- [X] T066 [US3] Add date range filtering (from_date, to_date) to GET /api/screenshots
+- [X] T067 [US3] Implement GET /api/screenshots/[id]/route.ts for screenshot metadata
+- [X] T068 [US3] Implement PATCH /api/screenshots/[id]/route.ts for metadata updates (filename, is_public)
+- [X] T069 [US3] Implement DELETE /api/screenshots/[id]/route.ts for screenshot deletion
+- [X] T070 [US3] Add Supabase Storage file deletion in DELETE /api/screenshots/[id]
+- [X] T071 [US3] Implement GET /api/screenshots/[id]/download/route.ts for signed download URLs
+- [X] T072 [US3] Implement GET /api/usage route in src/app/api/usage/route.ts
+- [X] T073 [US3] Add monthly limit calculation with grandfathering logic in GET /api/usage
+- [X] T074 [US3] Add upgrade prompt generation based on usage in GET /api/usage
+- [X] T075 [US3] Implement GET /api/usage/history route in src/app/api/usage/history/route.ts
+- [X] T076 [US3] Add aggregate statistics calculation in GET /api/usage/history
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -183,11 +183,11 @@ description: "Task list for Core API Backend implementation"
 
 ### Implementation for Account Deletion
 
-- [ ] T079 [US2] Implement POST /api/auth/delete route in src/app/api/auth/delete/route.ts
-- [ ] T080 [US2] Add cascade deletion of screenshots (database + storage files) in POST /api/auth/delete
-- [ ] T081 [US2] Add cascade deletion of monthly_usage records in POST /api/auth/delete
-- [ ] T082 [US2] Add Stripe customer deletion in POST /api/auth/delete
-- [ ] T083 [US2] Add user profile deletion (auth.users cascade) in POST /api/auth/delete
+- [X] T079 [US2] Implement POST /api/auth/delete route in src/app/api/auth/delete/route.ts
+- [X] T080 [US2] Add cascade deletion of screenshots (database + storage files) in POST /api/auth/delete
+- [X] T081 [US2] Add cascade deletion of monthly_usage records in POST /api/auth/delete
+- [X] T082 [US2] Add Stripe customer deletion in POST /api/auth/delete
+- [X] T083 [US2] Add user profile deletion (auth.users cascade) in POST /api/auth/delete
 
 ---
 
@@ -195,19 +195,19 @@ description: "Task list for Core API Backend implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T084 [P] Add rate limiting to all upload endpoints (10 uploads/min/user)
-- [ ] T085 [P] Add rate limiting to all API endpoints (100 requests/min/user)
-- [ ] T086 [P] Add CORS configuration for browser extension origins in next.config.ts
-- [ ] T087 [P] Add error logging with structured format (JSON) across all API routes
-- [ ] T088 [P] Add performance monitoring (Vercel Analytics) to critical endpoints
-- [ ] T089 [P] Add JSDoc comments to all API route handlers with examples
-- [ ] T090 [P] Add JSDoc comments to all library functions in src/lib/
-- [ ] T091 [P] Verify all HTTP status codes match spec (200, 201, 400, 401, 403, 404, 410, 413, 429, 500)
-- [ ] T092 [P] Add user-friendly error messages (no stack traces) in production
-- [ ] T093 [P] Add environment variable validation on startup (check all required vars present)
-- [ ] T094 [P] Create Vercel deployment configuration (vercel.json) with edge function settings
-- [ ] T095 [P] Create Vercel cron job for expired screenshot cleanup (weekly)
-- [ ] T096 [P] Update quickstart.md with any implementation-specific notes
+- [X] T084 [P] Add rate limiting to all upload endpoints (10 uploads/min/user)
+- [X] T085 [P] Add rate limiting to all API endpoints (100 requests/min/user)
+- [X] T086 [P] Add CORS configuration for browser extension origins in next.config.ts
+- [X] T087 [P] Add error logging with structured format (JSON) across all API routes
+- [X] T088 [P] Add performance monitoring (Vercel Analytics) to critical endpoints
+- [X] T089 [P] Add JSDoc comments to all API route handlers with examples
+- [X] T090 [P] Add JSDoc comments to all library functions in src/lib/
+- [X] T091 [P] Verify all HTTP status codes match spec (200, 201, 400, 401, 403, 404, 410, 413, 429, 500)
+- [X] T092 [P] Add user-friendly error messages (no stack traces) in production
+- [X] T093 [P] Add environment variable validation on startup (check all required vars present)
+- [X] T094 [P] Create Vercel deployment configuration (vercel.json) with edge function settings
+- [X] T095 [P] Create Vercel cron job for expired screenshot cleanup (weekly)
+- [X] T096 [P] Update quickstart.md with any implementation-specific notes
 - [ ] T097 Run full test suite (contract + integration + unit)
 - [ ] T098 Verify constitution compliance: <200ms API responses, <10s uploads, TDD complete
 - [ ] T099 Deploy to Vercel preview environment and test end-to-end

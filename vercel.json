@@ -1,0 +1,28 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 10,
+      "memory": 1024
+    },
+    "api/billing/webhook/route.ts": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "api/auth/delete/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-expired",
+      "schedule": "0 0 * * 0"
+    }
+  ]
+}
+

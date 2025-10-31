@@ -8,11 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "test:unit": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:api": "vitest run tests/api",
     "test:coverage": "vitest --coverage",
     "test:contract": "playwright test tests/contract",
     "test:integration": "playwright test tests/integration",
-    "test:all": "npm run test:unit && npm run test:contract && npm run test:integration"
+    "test:all": "npm run test:unit && npm run test:api && npm run test:integration"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

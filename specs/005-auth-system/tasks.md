@@ -66,9 +66,9 @@
 
 ### Stripe Integration Setup
 
-- [ ] T020 **USE CONTEXT7**: Fetch Stripe Node.js documentation using `mcp__context7__get-library-docs` for "/stripe/stripe-node" focused on "customer creation"
-- [ ] T021 [P] **USE CONTEXT7**: Fetch Stripe webhook documentation using `mcp__context7__get-library-docs` for "/stripe/stripe-node" focused on "webhook handling and signature verification"
-- [ ] T021a Create Stripe customer utilities in `src/lib/stripe/customer.ts` for creating and linking Stripe customers to user profiles
+- [X] T020 **USE CONTEXT7**: Fetch Stripe Node.js documentation using `mcp__context7__get-library-docs` for "/stripe/stripe-node" focused on "customer creation"
+- [X] T021 [P] **USE CONTEXT7**: Fetch Stripe webhook documentation using `mcp__context7__get-library-docs` for "/stripe/stripe-node" focused on "webhook handling and signature verification"
+- [X] T021a Create Stripe customer utilities in `src/lib/stripe/customer.ts` for creating and linking Stripe customers to user profiles
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 

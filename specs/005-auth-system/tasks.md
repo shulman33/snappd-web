@@ -51,11 +51,11 @@
 
 ### Rate Limiting Infrastructure
 
-- [ ] T014 [P] **USE CONTEXT7**: Fetch @upstash/ratelimit documentation using `mcp__context7__get-library-docs` for "/upstash/ratelimit" focused on "slidingWindow" algorithm
-- [ ] T015 Create rate limiting utilities in `src/lib/auth/rate-limit.ts` with ipRateLimiter (20/15min), accountRateLimiter (5/15min), passwordResetLimiter (3/1hr), magicLinkLimiter (5/1hr), verificationLimiter (3/1hr) per research.md section 4
-- [ ] T015a [P] **USE CONTEXT7**: Fetch @upstash/redis documentation using `mcp__context7__get-library-docs` for "/upstash/redis" focused on "Redis client usage and configuration"
-- [ ] T016 [P] **USE CONTEXT7**: Fetch Next.js 15 middleware documentation using `mcp__context7__get-library-docs` for "/vercel/next.js" focused on "middleware and request handling"
-- [ ] T016a Implement rate limiting middleware in `src/app/middleware.ts` for IP-based rate limiting on /api/auth/* routes with proper error responses and retry headers per research.md section 4
+- [X] T014 [P] **USE CONTEXT7**: Fetch @upstash/ratelimit documentation using `mcp__context7__get-library-docs` for "/upstash/ratelimit" focused on "slidingWindow" algorithm
+- [X] T015 Create rate limiting utilities in `src/lib/auth/rate-limit.ts` with ipRateLimiter (20/15min), accountRateLimiter (5/15min), passwordResetLimiter (3/1hr), magicLinkLimiter (5/1hr), verificationLimiter (3/1hr) per research.md section 4
+- [X] T015a [P] **USE CONTEXT7**: Fetch @upstash/redis documentation using `mcp__context7__get-library-docs` for "/upstash/redis" focused on "Redis client usage and configuration"
+- [X] T016 [P] **USE CONTEXT7**: Fetch Next.js 15 middleware documentation using `mcp__context7__get-library-docs` for "/vercel/next.js" focused on "middleware and request handling"
+- [X] T016a Implement rate limiting middleware in `src/middleware.ts` for IP-based rate limiting on /api/auth/* routes with proper error responses and retry headers per research.md section 4
 
 ### Auth Utilities & Error Handling
 

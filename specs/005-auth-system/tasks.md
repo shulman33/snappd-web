@@ -59,10 +59,10 @@
 
 ### Auth Utilities & Error Handling
 
-- [ ] T017 [P] Create auth error types and handlers in `src/lib/auth/errors.ts` defining AuthError interface and AuthErrorHandler class per research.md section 8
-- [ ] T018 [P] **USE CONTEXT7**: Fetch Next.js 15 cookies documentation using `mcp__context7__get-library-docs` for "/vercel/next.js" focused on "cookies API and server actions"
-- [ ] T018a [P] Create session management utilities in `src/lib/auth/session.ts` for session validation and cookie configuration per research.md section 6
-- [ ] T019 [P] **USE SUPABASE MCP**: Create auth event logging helper in `src/lib/auth/logger.ts` that uses `mcp__supabase__execute_sql` to insert into auth_events table for audit trail
+- [x] T017 [P] Create auth error types and handlers in `src/lib/auth/errors.ts` defining AuthError interface and AuthErrorHandler class per research.md section 8
+- [x] T018 [P] **USE CONTEXT7**: Fetch Next.js 15 cookies documentation using `mcp__context7__get-library-docs` for "/vercel/next.js" focused on "cookies API and server actions"
+- [x] T018a [P] Create session management utilities in `src/lib/auth/session.ts` for session validation and cookie configuration per research.md section 6
+- [x] T019 [P] **USE SUPABASE MCP**: Create auth event logging helper in `src/lib/auth/logger.ts` that uses `mcp__supabase__execute_sql` to insert into auth_events table for audit trail
 
 ### Stripe Integration Setup
 

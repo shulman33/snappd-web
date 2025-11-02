@@ -82,18 +82,18 @@
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] **USE CONTEXT7**: Fetch Next.js 15 Route Handlers documentation using `mcp__context7__get-library-docs` for "/vercel/next.js" focused on "route handlers" and "POST requests"
-- [ ] T023 [P] [US1] **USE SUPABASE MCP**: Review Supabase docs for signup using `mcp__supabase__search_docs` with GraphQL query for "signUp email password verification"
-- [ ] T023a [P] [US1] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "auth methods and error handling"
-- [ ] T024 [US1] Implement POST /api/auth/signup route handler in `src/app/api/auth/signup/route.ts` with signupSchema validation, supabase.auth.signUp(), profile creation via trigger, email verification sending, and auth event logging
-- [ ] T025 [US1] Add account lockout check in signup route using accountRateLimiter to prevent rapid signup abuse
-- [ ] T026 [US1] Implement error handling in signup route for EMAIL_EXISTS (409), VALIDATION_ERROR (400), and generic errors per contracts/openapi.yaml
-- [ ] T027 [US1] **USE SUPABASE MCP**: Verify signup creates both auth.users and profiles records atomically using `mcp__supabase__execute_sql` to query both tables
-- [ ] T028 [P] [US1] **USE SUPABASE MCP**: Review Supabase docs for email verification using `mcp__supabase__search_docs` with GraphQL query for "email verification confirm"
-- [ ] T029 [US1] Implement POST /api/auth/verify-email route handler in `src/app/api/auth/verify-email/route.ts` for email verification with token validation, single-use enforcement, and redirect to dashboard
-- [ ] T030 [US1] Add verification email resend endpoint in `src/app/api/auth/verify-email/resend/route.ts` with verificationLimiter rate limiting (3/hr)
-- [ ] T031 [US1] Add auth event logging for signup_success, signup_failure, email_verified events using auth event logger from T019
-- [ ] T032 [US1] **USE SUPABASE MCP**: Test signup flow end-to-end using `mcp__supabase__execute_sql` to verify profile creation and RLS policies
+- [X] T022 [P] [US1] **USE CONTEXT7**: Fetch Next.js 15 Route Handlers documentation using `mcp__context7__get-library-docs` for "/vercel/next.js" focused on "route handlers" and "POST requests"
+- [X] T023 [P] [US1] **USE SUPABASE MCP**: Review Supabase docs for signup using `mcp__supabase__search_docs` with GraphQL query for "signUp email password verification"
+- [X] T023a [P] [US1] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "auth methods and error handling"
+- [X] T024 [US1] Implement POST /api/auth/signup route handler in `src/app/api/auth/signup/route.ts` with signupSchema validation, supabase.auth.signUp(), profile creation via trigger, email verification sending, and auth event logging
+- [X] T025 [US1] Add account lockout check in signup route using accountRateLimiter to prevent rapid signup abuse
+- [X] T026 [US1] Implement error handling in signup route for EMAIL_EXISTS (409), VALIDATION_ERROR (400), and generic errors per contracts/openapi.yaml
+- [X] T027 [US1] **USE SUPABASE MCP**: Verify signup creates both auth.users and profiles records atomically using `mcp__supabase__execute_sql` to query both tables
+- [X] T028 [P] [US1] **USE SUPABASE MCP**: Review Supabase docs for email verification using `mcp__supabase__search_docs` with GraphQL query for "email verification confirm"
+- [X] T029 [US1] Implement POST /api/auth/verify-email route handler in `src/app/api/auth/verify-email/route.ts` for email verification with token validation, single-use enforcement, and redirect to dashboard
+- [X] T030 [US1] Add verification email resend endpoint in `src/app/api/auth/verify-email/resend/route.ts` with verificationLimiter rate limiting (3/hr)
+- [X] T031 [US1] Add auth event logging for signup_success, signup_failure, email_verified events using auth event logger from T019
+- [X] T032 [US1] **USE SUPABASE MCP**: Test signup flow end-to-end using `mcp__supabase__execute_sql` to verify profile creation and RLS policies
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - users can register and verify email
 

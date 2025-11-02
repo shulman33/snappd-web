@@ -7,7 +7,7 @@
  * @module lib/auth/logger
  */
 
-import { createServerClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 
 /**
  * Authentication event types
@@ -161,7 +161,7 @@ export class AuthEventLogger {
    */
   static async log(event: AuthEvent): Promise<void> {
     try {
-      const supabase = await createServerClient();
+      const supabase = createServiceClient();
 
       const { error } = await supabase.from('auth_events').insert({
         event_type: event.eventType,
@@ -308,7 +308,7 @@ export class AuthEventLogger {
     windowMinutes: number = 15
   ): Promise<number> {
     try {
-      const supabase = await createServerClient();
+      const supabase = createServiceClient();
       const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
 
       const { count, error } = await supabase
@@ -342,7 +342,7 @@ export class AuthEventLogger {
     windowMinutes: number = 15
   ): Promise<number> {
     try {
-      const supabase = await createServerClient();
+      const supabase = createServiceClient();
       const windowStart = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
 
       const { count, error } = await supabase
@@ -407,7 +407,7 @@ export class AuthEventLogger {
    */
   static async getUserEvents(userId: string, limit: number = 50) {
     try {
-      const supabase = await createServerClient();
+      const supabase = createServiceClient();
 
       const { data, error } = await supabase
         .from('auth_events')

@@ -20,11 +20,11 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Install authentication dependencies: `npm install @supabase/supabase-js @supabase/ssr zod @upstash/ratelimit @upstash/redis stripe`
-- [ ] T002 Create directory structure: `src/app/api/auth/`, `src/lib/supabase/`, `src/lib/auth/`, `src/lib/schemas/`
-- [ ] T003 [P] **USE CONTEXT7**: Fetch Zod documentation using `mcp__context7__get-library-docs` for "/colinhacks/zod" focused on "schema validation patterns"
-- [ ] T003a [P] Copy Zod schemas from `specs/005-auth-system/contracts/schemas/zod-schemas.ts` to `src/lib/schemas/auth.ts`
-- [ ] T004 [P] Configure environment variables in `.env.local` per quickstart.md (Supabase URL, keys, OAuth credentials, Upstash Redis)
+- [X] T001 Install authentication dependencies: `npm install @supabase/supabase-js @supabase/ssr zod @upstash/ratelimit @upstash/redis stripe`
+- [X] T002 Create directory structure: `src/app/api/auth/`, `src/lib/supabase/`, `src/lib/auth/`, `src/lib/schemas/`
+- [X] T003 [P] **USE CONTEXT7**: Fetch Zod documentation using `mcp__context7__get-library-docs` for "/colinhacks/zod" focused on "schema validation patterns"
+- [X] T003a [P] Copy Zod schemas from `specs/005-auth-system/contracts/schemas/zod-schemas.ts` to `src/lib/schemas/auth.ts`
+- [X] T004 [P] Configure environment variables in `.env.local` per quickstart.md (Supabase URL, keys, OAuth credentials, Upstash Redis)
 
 ---
 

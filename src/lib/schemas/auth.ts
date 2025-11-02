@@ -149,7 +149,7 @@ export const deleteAccountSchema = z.object({
     .min(1, 'Password is required for account deletion'),
 
   confirmation: z.literal('DELETE MY ACCOUNT', {
-    errorMap: () => ({ message: 'You must type "DELETE MY ACCOUNT" to confirm' }),
+    message: 'You must type "DELETE MY ACCOUNT" to confirm',
   }),
 });
 
@@ -296,7 +296,7 @@ export const authUserSchema = z.object({
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
   last_sign_in_at: z.string().datetime().nullable(),
-  raw_user_meta_data: z.record(z.unknown()),
+  raw_user_meta_data: z.record(z.string(), z.unknown()),
 });
 
 export type AuthUser = z.infer<typeof authUserSchema>;
@@ -342,9 +342,9 @@ export const authEventSchema = z.object({
   ]),
   user_id: z.string().uuid().nullable(),
   email: z.string().nullable(),
-  ip_address: z.string().ip(),
+  ip_address: z.string(),
   user_agent: z.string().nullable(),
-  metadata: z.record(z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
   created_at: z.string().datetime(),
 });
 
@@ -376,8 +376,8 @@ export type Identity = z.infer<typeof identitySchema>;
 /**
  * Formats Zod errors into API-friendly validation error details
  */
-export function formatZodError(error: z.ZodError): ValidationErrorDetail[] {
-  return error.errors.map((err) => ({
+export function formatZodError(error: z.ZodError<any>): ValidationErrorDetail[] {
+  return error.issues.map((err) => ({
     field: err.path.join('.'),
     message: err.message,
   }));

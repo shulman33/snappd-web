@@ -241,7 +241,7 @@ export class AuthErrorHandler {
     const isDev = process.env.NODE_ENV !== 'production';
 
     // Format validation errors for user-friendly display
-    const formattedErrors = error.errors.map((err) => ({
+    const formattedErrors = error.issues.map((err) => ({
       field: err.path.join('.'),
       message: err.message,
     }));

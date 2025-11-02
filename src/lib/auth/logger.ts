@@ -169,7 +169,7 @@ export class AuthEventLogger {
         email: event.email || null,
         ip_address: event.ipAddress,
         user_agent: event.userAgent || null,
-        metadata: event.metadata || {},
+        metadata: (event.metadata || {}) as any,
         created_at: new Date().toISOString(),
       });
 

@@ -9,7 +9,7 @@
  */
 
 import { cookies } from 'next/headers';
-import type { CookieOptions } from 'next/dist/compiled/@edge-runtime/cookies';
+import type { ResponseCookie } from 'next/dist/compiled/@edge-runtime/cookies';
 
 /**
  * Session cookie configuration
@@ -20,7 +20,7 @@ import type { CookieOptions } from 'next/dist/compiled/@edge-runtime/cookies';
  * - SameSite=Lax: CSRF protection while allowing navigation from external sites
  * - Max-Age: 7 days (604800 seconds) - matches Supabase default
  */
-export const SESSION_COOKIE_CONFIG: CookieOptions = {
+export const SESSION_COOKIE_CONFIG: Partial<ResponseCookie> = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',
@@ -255,7 +255,7 @@ export function isSessionExpired(expiresAt: string): boolean {
  * cookies().set('my-cookie', 'value', cookieOptions);
  * ```
  */
-export function getCookieOptions(options: Partial<CookieOptions> = {}): CookieOptions {
+export function getCookieOptions(options: Partial<ResponseCookie> = {}): Partial<ResponseCookie> {
   return {
     ...SESSION_COOKIE_CONFIG,
     ...options,

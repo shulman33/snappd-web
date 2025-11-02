@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "Build a comprehensive authentication system for Snappd that handles user registration, login, session management, and account security. The system should support multiple authentication methods including email/password, social OAuth (Google, GitHub), and magic link authentication for passwordless login. Users need to be able to create accounts, verify their email addresses, securely log in and out, reset forgotten passwords, and manage their authentication preferences. The system should handle user sessions across the browser extension and web dashboard, ensuring users stay logged in appropriately while maintaining security. Include proper rate limiting to prevent abuse, secure password requirements, and account lockout mechanisms for security. The authentication system should integrate seamlessly with our existing user profiles and billing system, automatically creating user profiles when accounts are created and linking to Stripe customer records for paid users. Users should be able to delete their accounts completely, update their email addresses with proper verification, and manage connected social accounts. The system needs to work reliably across different browsers and handle edge cases like expired sessions, concurrent logins, and authentication state synchronization between the extension and web app. All authentication flows should be user-friendly with clear error messages and recovery options when things go wrong."
 
+## Clarifications
+
+### Session 2025-11-02
+
+- Q: Where will Supabase Auth user accounts be stored? → A: In Supabase's auth.users schema (managed by Supabase Auth), with profiles table referencing auth.users.id via foreign key
+- Q: Which session storage mechanism should be used for authentication tokens? → A: HTTP-only cookies (immune to XSS, accessible server-side, works across web and extension with proper setup)
+- Q: How should the browser extension synchronize authentication state changes with the web dashboard? → A: Polling with exponential backoff - checks every 10-30s when active, simpler infrastructure, acceptable 30s lag
+- Q: What should be the scope of rate limiting for failed login attempts? → A: Both: 5 failed attempts per account + 20 failed attempts per IP within 15 minutes (defense-in-depth, best security)
+- Q: How should the system handle email delivery failures for authentication emails? → A: Retry with exponential backoff + notify user
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Email/Password Account Creation (Priority: P1)
@@ -38,8 +48,9 @@ A registered user wants to log in securely to access their screenshots and manag
 1. **Given** a verified user enters correct credentials, **When** they submit the login form, **Then** they are redirected to their dashboard and a secure session is established
 2. **Given** a user enters incorrect credentials, **When** they submit the login form, **Then** they see a generic error message ("Invalid email or password") to prevent account enumeration
 3. **Given** a user is logged in, **When** they close and reopen their browser, **Then** they remain logged in if the session hasn't expired (configurable duration, default 7 days)
-4. **Given** a user exceeds the maximum login attempts (5 failed attempts), **When** they try to log in again, **Then** their account is temporarily locked for 15 minutes
-5. **Given** a user is logged in on both the web dashboard and browser extension, **When** they perform an action on either platform, **Then** their authentication state is synchronized across both
+4. **Given** a user exceeds the maximum login attempts (5 failed attempts per account), **When** they try to log in again, **Then** their account is temporarily locked for 15 minutes
+5. **Given** an IP address exceeds the maximum login attempts (20 failed attempts across any accounts), **When** another login is attempted from that IP, **Then** the IP is temporarily blocked for 15 minutes
+6. **Given** a user is logged in on both the web dashboard and browser extension, **When** they perform an action on either platform, **Then** their authentication state is synchronized across both
 
 ---
 
@@ -172,7 +183,7 @@ A user wants to permanently delete their Snappd account and all associated data,
   - Expected: Allow password reset; inform user they're already logged in; optionally invalidate other sessions
 
 - **Cross-Platform Session Synchronization Lag**: What happens if auth state changes in the web app but hasn't synced to the extension yet?
-  - Expected: Extension polls for auth state changes or uses webhooks/SSE for real-time updates; maximum lag of 30 seconds
+  - Expected: Extension polls for auth state changes using exponential backoff (10-30 second intervals); maximum lag of 30 seconds; poll resets to 10s interval on user activity
 
 - **Malformed OAuth Responses**: How does the system handle unexpected or malicious data from OAuth providers?
   - Expected: Validate all OAuth responses; reject invalid data; log security events; display generic error to user
@@ -180,8 +191,11 @@ A user wants to permanently delete their Snappd account and all associated data,
 - **Account Lockout Recovery**: What happens when a user's account is locked due to failed login attempts and they've lost access to their email?
   - Expected: User must wait for automatic lockout expiration (15 minutes); no additional recovery mechanisms provided; lockout automatically lifts after timeout period
 
+- **Shared IP Rate Limiting**: What happens when multiple legitimate users share an IP address (office, VPN, public WiFi) and the IP gets rate limited?
+  - Expected: IP-based limit set higher (20 attempts vs 5 per account) to accommodate shared IPs; individual accounts can still be locked independently at 5 attempts; both limits reset after 15 minutes; users on blocked IP see clear error message indicating temporary block
+
 - **Email Bounce on Critical Authentication Emails**: What happens when verification, password reset, or magic link emails bounce?
-  - Expected: Log the bounce event; provide alternative verification methods or support contact; display user-friendly error after detection
+  - Expected: System retries email delivery using exponential backoff (3 attempts: immediate, 2min, 5min); logs all delivery attempts and failures; after final failure, displays user-friendly error message with options to update email address or contact support
 
 - **Token Replay Attacks**: How does the system prevent reuse of password reset tokens, magic links, or email verification links?
   - Expected: Single-use tokens; invalidate after use; validate token hasn't been consumed; log suspicious activity
@@ -209,86 +223,94 @@ A user wants to permanently delete their Snappd account and all associated data,
 - **FR-009**: System MUST automatically create a user profile with 'free' plan tier upon successful registration
 - **FR-010**: System MUST validate email format before accepting registration requests
 - **FR-011**: System MUST enforce password requirements: minimum 8 characters, at least one uppercase letter, one lowercase letter, one number, and one special character
+- **FR-012**: System MUST retry failed email deliveries using exponential backoff: 3 attempts over 5 minutes (immediate, 2min, 5min) for transient failures
+- **FR-013**: System MUST display user-friendly error message after final email delivery failure with options to update email address or contact support
+- **FR-014**: System MUST log all email delivery attempts and failures for debugging and monitoring purposes
 
 **Session Management**
 
-- **FR-012**: System MUST create secure session tokens upon successful authentication
-- **FR-013**: System MUST maintain sessions for a configurable duration (default 7 days)
-- **FR-014**: System MUST support concurrent sessions across multiple devices and browsers
-- **FR-015**: System MUST synchronize authentication state between web dashboard and browser extension within 30 seconds
-- **FR-016**: System MUST invalidate sessions upon user logout
-- **FR-017**: System MUST automatically extend session expiration on user activity (sliding window)
-- **FR-018**: System MUST detect and handle expired sessions gracefully with re-authentication prompts
+- **FR-015**: System MUST create secure session tokens upon successful authentication and store them in HTTP-only cookies
+- **FR-016**: System MUST maintain sessions for a configurable duration (default 7 days)
+- **FR-017**: System MUST support concurrent sessions across multiple devices and browsers
+- **FR-018**: System MUST synchronize authentication state between web dashboard and browser extension within 30 seconds using polling with exponential backoff (10-30 second intervals when extension is active)
+- **FR-019**: System MUST invalidate sessions upon user logout by clearing HTTP-only cookies and revoking server-side session records
+- **FR-020**: System MUST automatically extend session expiration on user activity (sliding window)
+- **FR-021**: System MUST detect and handle expired sessions gracefully with re-authentication prompts
+- **FR-022**: System MUST set appropriate cookie security flags: HttpOnly, Secure (HTTPS-only), SameSite=Lax for CSRF protection
+- **FR-023**: Browser extension MUST implement polling with exponential backoff to check auth state: start at 10s intervals, increase to maximum 30s when idle, reset to 10s on user activity
 
 **Password Management**
 
-- **FR-019**: System MUST provide password reset functionality via email
-- **FR-020**: System MUST generate secure, time-limited password reset tokens (valid for 1 hour)
-- **FR-021**: System MUST invalidate all other sessions when a password is successfully reset (except the current session)
-- **FR-022**: System MUST allow users to change their password when authenticated
-- **FR-023**: System MUST require current password verification before allowing password changes
+- **FR-024**: System MUST provide password reset functionality via email
+- **FR-025**: System MUST generate secure, time-limited password reset tokens (valid for 1 hour)
+- **FR-026**: System MUST invalidate all other sessions when a password is successfully reset (except the current session)
+- **FR-027**: System MUST allow users to change their password when authenticated
+- **FR-028**: System MUST require current password verification before allowing password changes
 
 **Security and Rate Limiting**
 
-- **FR-024**: System MUST implement rate limiting on login attempts: maximum 5 failed attempts per account within 15 minutes
-- **FR-025**: System MUST temporarily lock accounts for 15 minutes after exceeding failed login attempts
-- **FR-026**: System MUST implement rate limiting on password reset requests: maximum 3 requests per hour per email
-- **FR-027**: System MUST implement rate limiting on magic link requests: maximum 5 requests per hour per email
-- **FR-028**: System MUST implement rate limiting on email verification resend: maximum 3 requests per hour per email
-- **FR-029**: System MUST prevent account enumeration by showing generic error messages for failed logins
-- **FR-030**: System MUST ensure all authentication tokens are single-use (verification, reset, magic links)
-- **FR-031**: System MUST log all authentication events (login, logout, failed attempts, password changes) for security audit
+- **FR-029**: System MUST implement dual-scope rate limiting on login attempts: (1) maximum 5 failed attempts per account within 15 minutes, AND (2) maximum 20 failed attempts per IP address within 15 minutes
+- **FR-030**: System MUST temporarily lock accounts for 15 minutes after exceeding per-account failed login limit (5 attempts)
+- **FR-031**: System MUST temporarily block IP addresses for 15 minutes after exceeding per-IP failed login limit (20 attempts)
+- **FR-032**: System MUST implement rate limiting on password reset requests: maximum 3 requests per hour per email
+- **FR-033**: System MUST implement rate limiting on magic link requests: maximum 5 requests per hour per email
+- **FR-034**: System MUST implement rate limiting on email verification resend: maximum 3 requests per hour per email
+- **FR-035**: System MUST prevent account enumeration by showing generic error messages for failed logins
+- **FR-036**: System MUST ensure all authentication tokens are single-use (verification, reset, magic links)
+- **FR-037**: System MUST log all authentication events including source IP address (login, logout, failed attempts, password changes, rate limit triggers) for security audit
+- **FR-038**: System MUST track failed login attempts by both account identifier and source IP address independently to enable defense-in-depth rate limiting
 
 **OAuth Integration**
 
-- **FR-032**: System MUST handle OAuth authorization codes and exchange them for access tokens securely
-- **FR-033**: System MUST extract user email and name from OAuth provider responses
-- **FR-034**: System MUST link OAuth providers to existing accounts when emails match
-- **FR-035**: System MUST create new accounts automatically for new OAuth users
-- **FR-036**: System MUST handle OAuth errors gracefully and provide clear user feedback
-- **FR-037**: System MUST store minimal OAuth provider information (provider name, provider user ID, linked date)
+- **FR-039**: System MUST handle OAuth authorization codes and exchange them for access tokens securely
+- **FR-040**: System MUST extract user email and name from OAuth provider responses
+- **FR-041**: System MUST link OAuth providers to existing accounts when emails match
+- **FR-042**: System MUST create new accounts automatically for new OAuth users
+- **FR-043**: System MUST handle OAuth errors gracefully and provide clear user feedback
+- **FR-044**: System MUST store minimal OAuth provider information (provider name, provider user ID, linked date)
 
 **Account Management**
 
-- **FR-038**: Users MUST be able to update their email address with verification of both old and new addresses
-- **FR-039**: System MUST send verification emails to both old and new addresses for email changes
-- **FR-040**: System MUST complete email changes only after both addresses are verified within 24 hours
-- **FR-041**: Users MUST be able to view all connected OAuth providers in account settings
-- **FR-042**: Users MUST be able to link additional OAuth providers to their account
-- **FR-043**: Users MUST be able to unlink OAuth providers if they have at least one other authentication method
-- **FR-044**: System MUST prevent users from removing their last authentication method
-- **FR-045**: Users MUST be able to delete their account completely
+- **FR-045**: Users MUST be able to update their email address with verification of both old and new addresses
+- **FR-046**: System MUST send verification emails to both old and new addresses for email changes
+- **FR-047**: System MUST complete email changes only after both addresses are verified within 24 hours
+- **FR-048**: Users MUST be able to view all connected OAuth providers in account settings
+- **FR-049**: Users MUST be able to link additional OAuth providers to their account
+- **FR-050**: Users MUST be able to unlink OAuth providers if they have at least one other authentication method
+- **FR-051**: System MUST prevent users from removing their last authentication method
+- **FR-052**: Users MUST be able to delete their account completely
 
 **Account Deletion**
 
-- **FR-046**: System MUST require password verification (or OAuth re-authentication) before account deletion
-- **FR-047**: System MUST permanently delete user profiles, screenshots, usage data, and authentication records upon account deletion
-- **FR-048**: System MUST cancel active Stripe subscriptions when accounts are deleted
-- **FR-049**: System MUST send confirmation email after successful account deletion
-- **FR-050**: System MUST make the email address available for re-registration after account deletion
+- **FR-053**: System MUST require password verification (or OAuth re-authentication) before account deletion
+- **FR-054**: System MUST permanently delete user profiles, screenshots, usage data, and authentication records upon account deletion
+- **FR-055**: System MUST cancel active Stripe subscriptions when accounts are deleted
+- **FR-056**: System MUST send confirmation email after successful account deletion
+- **FR-057**: System MUST make the email address available for re-registration after account deletion
 
 **Error Handling and User Experience**
 
-- **FR-051**: System MUST provide clear, actionable error messages for all authentication failures
-- **FR-052**: System MUST allow users to resend verification emails if not received
-- **FR-053**: System MUST provide recovery options when tokens expire (resend verification, request new reset link)
-- **FR-054**: System MUST redirect users appropriately after successful authentication (return to intended page)
-- **FR-055**: System MUST display loading indicators during authentication processes
-- **FR-056**: System MUST handle network failures gracefully with retry mechanisms and user feedback
+- **FR-058**: System MUST provide clear, actionable error messages for all authentication failures
+- **FR-059**: System MUST allow users to resend verification emails if not received
+- **FR-060**: System MUST provide recovery options when tokens expire (resend verification, request new reset link)
+- **FR-061**: System MUST redirect users appropriately after successful authentication (return to intended page)
+- **FR-062**: System MUST display loading indicators during authentication processes
+- **FR-063**: System MUST handle network failures gracefully with retry mechanisms and user feedback
 
 **Integration with Existing Systems**
 
-- **FR-057**: System MUST integrate with existing profiles table (id, email, full_name, plan, stripe_customer_id, stripe_subscription_id)
-- **FR-058**: System MUST ensure profile creation happens atomically with account creation using database transactions
-- **FR-059**: System MUST roll back account creation if profile creation fails to maintain data consistency
-- **FR-060**: System MUST link new user profiles to Stripe customer records when users upgrade to paid plans
-- **FR-061**: System MUST maintain referential integrity between authentication records and user profiles
+- **FR-064**: System MUST integrate with existing profiles table (id, email, full_name, plan, stripe_customer_id, stripe_subscription_id)
+- **FR-065**: System MUST ensure profile creation in the profiles table happens atomically with account creation in auth.users, using a database trigger or transaction-wrapped API call to maintain consistency
+- **FR-066**: System MUST roll back auth.users account creation if profile creation fails to maintain data consistency (using Supabase Auth hooks or error handling)
+- **FR-067**: System MUST link new user profiles to Stripe customer records when users upgrade to paid plans
+- **FR-068**: System MUST maintain referential integrity between auth.users records and profiles table via foreign key constraint (profiles.id references auth.users.id)
 
 ### Key Entities *(include if feature involves data)*
 
-- **User Account**: Represents the authentication identity of a user
-  - Core attributes: unique identifier, primary email address, email verification status, account creation date, last login timestamp
-  - Relationships: Links to User Profile (1:1), OAuth Providers (1:many), Authentication Events (1:many)
+- **User Account** (auth.users table, managed by Supabase Auth): Represents the authentication identity of a user
+  - Core attributes: unique identifier (UUID), primary email address, email verification status, account creation date, last login timestamp, encrypted password (for email/password auth)
+  - Relationships: Links to User Profile (1:1 via profiles.id FK), OAuth Providers (1:many), Authentication Events (1:many)
+  - Note: This table is managed entirely by Supabase Auth and should not be modified directly by application code
 
 - **User Profile**: Represents the business/application data for a user (existing table)
   - Core attributes: email, full_name, plan tier (free/pro/team), stripe_customer_id, stripe_subscription_id, creation and update timestamps
@@ -299,16 +321,18 @@ A user wants to permanently delete their Snappd account and all associated data,
   - Relationships: Links to User Account (many:1)
 
 - **Authentication Event**: Represents a security-relevant event for audit logging
-  - Core attributes: event type (login_success, login_failure, password_reset, logout, account_locked), timestamp, IP address, user agent, user account reference
-  - Relationships: Links to User Account (many:1)
+  - Core attributes: event type (login_success, login_failure, password_reset, logout, account_locked, ip_blocked, rate_limit_triggered), timestamp, source IP address, user agent, user account reference (nullable for IP-based events)
+  - Relationships: Links to User Account (many:1, nullable for IP-based blocks)
+  - Purpose: Enables dual-scope rate limiting by tracking both per-account and per-IP failed login attempts
 
 - **Authentication Token**: Represents time-limited, single-use tokens for verification and authentication
   - Core attributes: token type (email_verification, password_reset, magic_link), token value (hashed), expiration timestamp, used status, created timestamp
   - Relationships: Links to User Account (many:1)
 
-- **Session**: Represents an active authenticated user session
-  - Core attributes: session token, user account reference, creation timestamp, last activity timestamp, expiration timestamp, device/browser information
+- **Session**: Represents an active authenticated user session (managed by Supabase Auth)
+  - Core attributes: session token (stored in HTTP-only cookie), user account reference, creation timestamp, last activity timestamp, expiration timestamp, device/browser information
   - Relationships: Links to User Account (many:1)
+  - Security: Session tokens stored in HTTP-only cookies with Secure and SameSite=Lax flags to prevent XSS and CSRF attacks
 
 ## Success Criteria *(mandatory)*
 
@@ -326,20 +350,23 @@ A user wants to permanently delete their Snappd account and all associated data,
 - **SC-010**: Users can successfully link OAuth providers to existing accounts with 95% success rate
 - **SC-011**: Account deletion completes successfully for 100% of requests within 24 hours
 - **SC-012**: Authentication-related support tickets decrease by 60% compared to manual account management
-- **SC-013**: Email delivery success rate for authentication emails (verification, reset, magic link) exceeds 98%
+- **SC-013**: Email delivery success rate for authentication emails (verification, reset, magic link) exceeds 98% after retry attempts (including exponential backoff retries)
 - **SC-014**: Users report satisfaction score of 4/5 or higher for authentication experience in user surveys
 - **SC-015**: Time-to-authenticate for returning users averages under 5 seconds (auto-login from existing session)
 
 ## Assumptions
 
-- Supabase Auth will be used as the authentication provider given the existing Supabase infrastructure
-- Email delivery service (e.g., Supabase Email, SendGrid, AWS SES) is configured and operational
-- The existing `profiles` table structure will remain unchanged and authentication will integrate with it
+- Supabase Auth will be used as the authentication provider, with user accounts stored in Supabase's auth.users schema (managed by Supabase) and the profiles table referencing auth.users.id via foreign key
+- Email delivery service (e.g., Supabase Email, SendGrid, AWS SES) is configured and operational with retry capability for transient failures
+- Email delivery failures will be handled with exponential backoff retry mechanism (3 attempts over 5 minutes) before notifying users
+- The existing `profiles` table structure will remain unchanged and authentication will integrate with it via foreign key to auth.users
 - Browser extension and web dashboard share the same authentication backend and session management
 - Users have access to their email for verification and recovery flows
 - OAuth provider APIs (Google, GitHub) remain stable and accessible
-- Session storage will use secure HTTP-only cookies or localStorage with appropriate security measures
-- The browser extension has necessary permissions to access authentication state and make API calls
+- Session tokens will be stored in HTTP-only cookies with Secure and SameSite=Lax flags for optimal XSS and CSRF protection
+- The browser extension will query authentication state via polling with exponential backoff (10-30 second intervals) rather than direct cookie access or real-time websocket connections
+- The browser extension has necessary permissions to make authenticated API calls to the backend
+- A 10-30 second polling interval provides acceptable balance between server load and auth state freshness for extension users
 - Rate limiting will be enforced at the application level (can be enhanced with infrastructure-level protection later)
 - Legal compliance for data retention and privacy (GDPR, CCPA) is handled through account deletion and data export features (data export is out of scope for this feature)
 - Multi-factor authentication (MFA) will be added in a future iteration after core authentication is stable

@@ -110,3 +110,10 @@ This is a screenshot sharing application with:
 - Screenshot upload and storage with metadata tracking
 - Usage tracking per user/month
 - Public/private screenshot sharing with view counts
+
+## Active Technologies
+- TypeScript 5.x with Next.js 15.5.5 (App Router), React 19.1.0 (005-auth-system)
+- PostgreSQL via Supabase (existing instance: iitxfjhnywekstxagump) (005-auth-system)
+
+## Recent Changes
+- 005-auth-system: Added TypeScript 5.x with Next.js 15.5.5 (App Router), React 19.1.0

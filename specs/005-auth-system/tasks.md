@@ -107,22 +107,22 @@
 
 ### Implementation for User Story 2
 
-- [ ] T033 [P] [US2] **USE SUPABASE MCP**: Review Supabase docs for signin using `mcp__supabase__search_docs` with GraphQL query for "signInWithPassword session cookies"
-- [ ] T033a [P] [US2] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "signInWithPassword and session management"
-- [ ] T034 [US2] Implement POST /api/auth/signin route handler in `src/app/api/auth/signin/route.ts` with signinSchema validation, dual-scope rate limiting (accountRateLimiter + ipRateLimiter), supabase.auth.signInWithPassword(), and session cookie setting per research.md section 2
-- [ ] T035 [US2] Add failed login attempt tracking in signin route by logging login_failure events to auth_events table using T019 logger
-- [ ] T036 [US2] Implement account lockout logic in signin route checking auth_events for 5 failures in 15min per account, returning 429 with account_locked event
-- [ ] T037 [US2] Implement IP blocking logic in signin route checking auth_events for 20 failures in 15min per IP, returning 429 with ip_blocked event
-- [ ] T038 [US2] Add generic error messages in signin route to prevent account enumeration (always "Invalid email or password" for failed credentials)
-- [ ] T039 [US2] Add email verification check in signin route returning 403 EMAIL_NOT_VERIFIED if email_confirmed_at is NULL
-- [ ] T040 [P] [US2] Implement POST /api/auth/signout route handler in `src/app/api/auth/signout/route.ts` with supabase.auth.signOut() and session cookie clearing
-- [ ] T041 [P] [US2] Implement GET /api/auth/user route handler in `src/app/api/auth/user/route.ts` returning current user data from session (for extension polling)
-- [ ] T042 [US2] Update middleware in `src/app/middleware.ts` to call updateSession from T013 for automatic token refresh on all requests
-- [ ] T043 [US2] Add protected route logic in middleware redirecting unauthenticated users from /dashboard/* to /login
-- [ ] T044 [US2] Configure session cookie security in Supabase client: HttpOnly, Secure (HTTPS-only), SameSite=Lax, Max-Age=604800 (7 days) per research.md section 6
-- [ ] T045 [US2] Add session expiration handling in middleware with graceful re-authentication prompts when sessions expire
-- [ ] T046 [US2] Add auth event logging for login_success, login_failure, account_locked, ip_blocked events
-- [ ] T047 [US2] **USE SUPABASE MCP**: Test concurrent session support using `mcp__supabase__execute_sql` to verify multiple sessions allowed per user
+- [X] T033 [P] [US2] **USE SUPABASE MCP**: Review Supabase docs for signin using `mcp__supabase__search_docs` with GraphQL query for "signInWithPassword session cookies"
+- [X] T033a [P] [US2] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "signInWithPassword and session management"
+- [X] T034 [US2] Implement POST /api/auth/signin route handler in `src/app/api/auth/signin/route.ts` with signinSchema validation, dual-scope rate limiting (accountRateLimiter + ipRateLimiter), supabase.auth.signInWithPassword(), and session cookie setting per research.md section 2
+- [X] T035 [US2] Add failed login attempt tracking in signin route by logging login_failure events to auth_events table using T019 logger
+- [X] T036 [US2] Implement account lockout logic in signin route checking auth_events for 5 failures in 15min per account, returning 429 with account_locked event
+- [X] T037 [US2] Implement IP blocking logic in signin route checking auth_events for 20 failures in 15min per IP, returning 429 with ip_blocked event
+- [X] T038 [US2] Add generic error messages in signin route to prevent account enumeration (always "Invalid email or password" for failed credentials)
+- [X] T039 [US2] Add email verification check in signin route returning 403 EMAIL_NOT_VERIFIED if email_confirmed_at is NULL
+- [X] T040 [P] [US2] Implement POST /api/auth/signout route handler in `src/app/api/auth/signout/route.ts` with supabase.auth.signOut() and session cookie clearing
+- [X] T041 [P] [US2] Implement GET /api/auth/user route handler in `src/app/api/auth/user/route.ts` returning current user data from session (for extension polling)
+- [X] T042 [US2] Update middleware in `src/app/middleware.ts` to call updateSession from T013 for automatic token refresh on all requests
+- [X] T043 [US2] Add protected route logic in middleware redirecting unauthenticated users from /dashboard/* to /login
+- [X] T044 [US2] Configure session cookie security in Supabase client: HttpOnly, Secure (HTTPS-only), SameSite=Lax, Max-Age=604800 (7 days) per research.md section 6
+- [X] T045 [US2] Add session expiration handling in middleware with graceful re-authentication prompts when sessions expire
+- [X] T046 [US2] Add auth event logging for login_success, login_failure, account_locked, ip_blocked events
+- [X] T047 [US2] **USE SUPABASE MCP**: Test concurrent session support using `mcp__supabase__execute_sql` to verify multiple sessions allowed per user
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently - users can register, verify, and log in securely
 

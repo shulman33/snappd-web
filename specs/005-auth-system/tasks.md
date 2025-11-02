@@ -136,18 +136,18 @@
 
 ### Implementation for User Story 3
 
-- [ ] T048 [P] [US3] **USE SUPABASE MCP**: Review Supabase docs for password reset using `mcp__supabase__search_docs` with GraphQL query for "resetPasswordForEmail password recovery"
-- [ ] T048a [P] [US3] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "password reset and recovery flows"
-- [ ] T049 [US3] Implement POST /api/auth/reset-password route handler in `src/app/api/auth/reset-password/route.ts` with resetPasswordRequestSchema validation, passwordResetLimiter rate limiting (3/hr), and supabase.auth.resetPasswordForEmail()
-- [ ] T050 [US3] Add exponential backoff retry logic for email delivery failures in reset-password route (3 attempts: immediate, 2min, 5min) per FR-012
-- [ ] T051 [US3] Add user-friendly error handling in reset-password route for email delivery failures with update email or contact support options per FR-013
-- [ ] T052 [US3] Add auth event logging for password_reset events with metadata tracking email delivery status
-- [ ] T053 [P] [US3] Implement POST /api/auth/reset-password/confirm route handler in `src/app/api/auth/reset-password/confirm/route.ts` for password reset confirmation with token validation and new password setting
-- [ ] T054 [US3] Add token expiration check in reset-password/confirm route ensuring tokens valid for max 1 hour per FR-025
-- [ ] T055 [US3] Add single-use token enforcement in reset-password/confirm route per FR-036
-- [ ] T056 [US3] Implement session invalidation in reset-password/confirm route to invalidate all other sessions except current one per FR-026
-- [ ] T057 [US3] Add auth event logging for password_changed events with method=reset metadata
-- [ ] T058 [US3] **USE SUPABASE MCP**: Test password reset token expiration and single-use enforcement using `mcp__supabase__execute_sql` to query token state
+- [X] T048 [P] [US3] **USE SUPABASE MCP**: Review Supabase docs for password reset using `mcp__supabase__search_docs` with GraphQL query for "resetPasswordForEmail password recovery"
+- [X] T048a [P] [US3] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "password reset and recovery flows"
+- [X] T049 [US3] Implement POST /api/auth/reset-password route handler in `src/app/api/auth/reset-password/route.ts` with resetPasswordRequestSchema validation, passwordResetLimiter rate limiting (3/hr), and supabase.auth.resetPasswordForEmail()
+- [X] T050 [US3] Add exponential backoff retry logic for email delivery failures in reset-password route (3 attempts: immediate, 2min, 5min) per FR-012
+- [X] T051 [US3] Add user-friendly error handling in reset-password route for email delivery failures with update email or contact support options per FR-013
+- [X] T052 [US3] Add auth event logging for password_reset events with metadata tracking email delivery status
+- [X] T053 [P] [US3] Implement POST /api/auth/reset-password/confirm route handler in `src/app/api/auth/reset-password/confirm/route.ts` for password reset confirmation with token validation and new password setting
+- [X] T054 [US3] Add token expiration check in reset-password/confirm route ensuring tokens valid for max 1 hour per FR-025
+- [X] T055 [US3] Add single-use token enforcement in reset-password/confirm route per FR-036
+- [X] T056 [US3] Implement session invalidation in reset-password/confirm route to invalidate all other sessions except current one per FR-026
+- [X] T057 [US3] Add auth event logging for password_changed events with method=reset metadata
+- [X] T058 [US3] **USE SUPABASE MCP**: Test password reset token expiration and single-use enforcement using `mcp__supabase__execute_sql` to query token state
 
 **Checkpoint**: All P1 user stories complete - users can register, login, and recover passwords
 

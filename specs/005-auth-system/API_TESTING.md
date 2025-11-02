@@ -11,11 +11,15 @@ This document provides curl commands to test all authentication flows for the Sn
 1. [User Registration Flow](#1-user-registration-flow)
 2. [Email Verification Flow](#2-email-verification-flow)
 3. [Login Flow](#3-login-flow)
-4. [Session Management](#4-session-management)
-5. [Logout Flow](#5-logout-flow)
-6. [Rate Limiting Tests](#6-rate-limiting-tests)
-7. [Account Lockout Tests](#7-account-lockout-tests)
-8. [Error Scenarios](#8-error-scenarios)
+4. [Password Reset Flow](#4-password-reset-flow)
+5. [Session Management](#5-session-management)
+6. [Logout Flow](#6-logout-flow)
+7. [Rate Limiting Tests](#7-rate-limiting-tests)
+8. [Account Lockout Tests](#8-account-lockout-tests)
+9. [Error Scenarios](#9-error-scenarios)
+10. [Complete User Journey Test](#10-complete-user-journey-test)
+11. [Testing Browser Extension Polling](#11-testing-browser-extension-polling)
+12. [Testing Concurrent Sessions](#12-testing-concurrent-sessions)
 
 ---
 
@@ -234,7 +238,343 @@ curl -X POST http://localhost:3000/api/auth/signin \
 
 ---
 
-## 4. Session Management
+## 4. Password Reset Flow
+
+### Request Password Reset
+
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com"
+  }' \
+  -v
+```
+
+**Expected Response (200)**:
+```json
+{
+  "message": "If an account exists with this email address, you will receive password reset instructions shortly. Please check your inbox and spam folder."
+}
+```
+
+**Note**: Response is the same whether the email exists or not (prevents account enumeration).
+
+### Request Password Reset - Invalid Email Format
+
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "not-an-email"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Invalid email address",
+  "details": [
+    {
+      "field": "email",
+      "message": "Invalid email address"
+    }
+  ]
+}
+```
+
+### Request Password Reset - Rate Limit Test
+
+```bash
+# Send 4 password reset requests in quick succession
+for i in {1..4}; do
+  echo "Password reset request $i:"
+  curl -X POST http://localhost:3000/api/auth/reset-password \
+    -H "Content-Type: application/json" \
+    -d '{
+      "email": "test@example.com"
+    }' \
+    -s | jq -r '.error // .message'
+  echo ""
+  sleep 1
+done
+```
+
+**Expected Output**:
+- First 3 requests: Success message
+- 4th request: `RATE_LIMIT_EXCEEDED` error
+
+**Response (429)** on 4th request:
+```json
+{
+  "error": "RATE_LIMIT_EXCEEDED",
+  "message": "Too many password reset requests. Please try again later or contact support if you need immediate assistance.",
+  "retryAfter": 3600
+}
+```
+
+### Confirm Password Reset (with token from email)
+
+```bash
+# Replace {token_hash} with actual token from password reset email
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "{token_hash}",
+    "password": "NewSecurePass123!",
+    "confirmPassword": "NewSecurePass123!"
+  }' \
+  -v
+```
+
+**Expected Response (200)**:
+```json
+{
+  "message": "Your password has been reset successfully. You can now log in with your new password.",
+  "user": {
+    "id": "uuid-here",
+    "email": "test@example.com"
+  }
+}
+```
+
+### Confirm Password Reset - Password Mismatch
+
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "{token_hash}",
+    "password": "NewSecurePass123!",
+    "confirmPassword": "DifferentPassword123!"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Invalid request data",
+  "details": [
+    {
+      "field": "confirmPassword",
+      "message": "Passwords do not match"
+    }
+  ]
+}
+```
+
+### Confirm Password Reset - Invalid/Expired Token
+
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "invalid-or-expired-token",
+    "password": "NewSecurePass123!",
+    "confirmPassword": "NewSecurePass123!"
+  }' \
+  -v
+```
+
+**Expected Response (401)**:
+```json
+{
+  "error": "INVALID_TOKEN",
+  "message": "Password reset link is invalid or has expired. Please request a new password reset.",
+  "canRetry": true
+}
+```
+
+### Confirm Password Reset - Weak Password
+
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "{token_hash}",
+    "password": "weak",
+    "confirmPassword": "weak"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Invalid request data",
+  "details": [
+    {
+      "field": "password",
+      "message": "Password must be at least 8 characters"
+    }
+  ]
+}
+```
+
+### Test Complete Password Reset Flow
+
+```bash
+#!/bin/bash
+
+# Step 1: Request password reset
+echo "=== Step 1: Request Password Reset ==="
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com"
+  }' | jq
+
+echo -e "\n=== Step 2: Check Email for Reset Link ==="
+echo "Manual step: Check email inbox for password reset link"
+echo "Extract the token_hash from the URL"
+
+# Step 3: Confirm password reset (replace {token_hash} with actual token)
+echo -e "\n=== Step 3: Confirm Password Reset ==="
+echo "curl -X POST http://localhost:3000/api/auth/reset-password/confirm \\"
+echo "  -H \"Content-Type: application/json\" \\"
+echo "  -d '{"
+echo "    \"token\": \"{token_hash}\","
+echo "    \"password\": \"NewSecurePass123!\","
+echo "    \"confirmPassword\": \"NewSecurePass123!\""
+echo "  }' | jq"
+
+# Step 4: Login with new password
+echo -e "\n=== Step 4: Login with New Password ==="
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "NewSecurePass123!"
+  }' \
+  -c reset_cookies.txt | jq
+
+# Step 5: Verify login successful
+echo -e "\n=== Step 5: Verify Login Successful ==="
+curl -X GET http://localhost:3000/api/auth/user \
+  -b reset_cookies.txt | jq
+
+# Cleanup
+rm -f reset_cookies.txt
+```
+
+### Test Token Expiration (Manual Test)
+
+**Note**: Password reset tokens expire after 1 hour. To test:
+
+1. Request a password reset
+2. Wait 61 minutes
+3. Try to use the token - should receive `INVALID_TOKEN` error
+
+```bash
+# Request reset
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com"
+  }'
+
+# Wait 61 minutes (or set SUPABASE_PASSWORD_RESET_EXPIRY to 1 minute for testing)
+sleep 3660
+
+# Try to use expired token
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "{token_hash}",
+    "password": "NewSecurePass123!",
+    "confirmPassword": "NewSecurePass123!"
+  }'
+```
+
+**Expected Response**: `INVALID_TOKEN` error
+
+### Test Single-Use Token Enforcement
+
+```bash
+# Get token from email and use it once
+TOKEN="your-token-hash-here"
+
+# First use - should succeed
+echo "=== First Use (Should Succeed) ==="
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"token\": \"$TOKEN\",
+    \"password\": \"NewSecurePass123!\",
+    \"confirmPassword\": \"NewSecurePass123!\"
+  }" | jq
+
+# Second use with same token - should fail
+echo -e "\n=== Second Use (Should Fail) ==="
+curl -X POST http://localhost:3000/api/auth/reset-password/confirm \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"token\": \"$TOKEN\",
+    \"password\": \"AnotherPassword123!\",
+    \"confirmPassword\": \"AnotherPassword123!\"
+  }" | jq
+```
+
+**Expected**:
+- First request: Success (200)
+- Second request: `INVALID_TOKEN` error (401)
+
+### Test Session Invalidation After Password Reset
+
+```bash
+# Login from two devices
+echo "=== Login from Device 1 ==="
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "OldPassword123!"
+  }' \
+  -c device1_cookies.txt | jq
+
+echo -e "\n=== Login from Device 2 ==="
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "OldPassword123!"
+  }' \
+  -c device2_cookies.txt | jq
+
+# Verify both sessions work
+echo -e "\n=== Verify Both Sessions Work ==="
+curl -X GET http://localhost:3000/api/auth/user \
+  -b device1_cookies.txt | jq -r '.user.email // "Session invalid"'
+
+curl -X GET http://localhost:3000/api/auth/user \
+  -b device2_cookies.txt | jq -r '.user.email // "Session invalid"'
+
+# Reset password (get token from email first)
+echo -e "\n=== Reset Password ==="
+echo "Use reset token to change password to NewPassword123!"
+
+# After password reset, verify old sessions are invalidated
+echo -e "\n=== Verify Old Sessions Invalidated ==="
+curl -X GET http://localhost:3000/api/auth/user \
+  -b device1_cookies.txt | jq
+
+curl -X GET http://localhost:3000/api/auth/user \
+  -b device2_cookies.txt | jq
+
+# Cleanup
+rm -f device1_cookies.txt device2_cookies.txt
+```
+
+**Expected**: After password reset, both old sessions should be invalidated (return 401).
+
+---
+
+## 5. Session Management
 
 ### Get Current User (Authenticated)
 
@@ -297,7 +637,7 @@ curl -X GET http://localhost:3000/api/auth/user \
 
 ---
 
-## 5. Logout Flow
+## 6. Logout Flow
 
 ### Sign Out
 
@@ -333,7 +673,7 @@ curl -X GET http://localhost:3000/api/auth/user \
 
 ---
 
-## 6. Rate Limiting Tests
+## 7. Rate Limiting Tests
 
 ### Test IP Rate Limiting (20 requests in 15 min)
 
@@ -384,7 +724,7 @@ curl -X POST http://localhost:3000/api/auth/signin \
 
 ---
 
-## 7. Account Lockout Tests
+## 8. Account Lockout Tests
 
 ### Test Account Lockout (5 failures in 15 min)
 
@@ -431,7 +771,7 @@ curl -X POST http://localhost:3000/api/auth/signin \
 
 ---
 
-## 8. Error Scenarios
+## 9. Error Scenarios
 
 ### Missing Required Fields
 
@@ -491,7 +831,7 @@ curl -X POST http://localhost:3000/api/auth/signin \
 
 ---
 
-## 9. Complete User Journey Test
+## 10. Complete User Journey Test
 
 ### Full Flow: Register → Verify → Login → Access Protected Resource → Logout
 
@@ -546,7 +886,7 @@ rm -f journey_cookies.txt
 
 ---
 
-## 10. Testing Browser Extension Polling
+## 11. Testing Browser Extension Polling
 
 ### Simulate Extension Polling for Auth State
 
@@ -566,7 +906,7 @@ done
 
 ---
 
-## 11. Testing Concurrent Sessions
+## 12. Testing Concurrent Sessions
 
 ### Login from Multiple "Devices"
 

@@ -36,11 +36,11 @@
 
 ### Database Setup
 
-- [ ] T005 **USE SUPABASE MCP**: Create auth_events table migration using `mcp__supabase__apply_migration` with name `add_auth_events_table` and SQL from data-model.md section 4
-- [ ] T006 **USE SUPABASE MCP**: Create profile trigger migration using `mcp__supabase__apply_migration` with name `add_profile_trigger` and SQL from data-model.md section 2 (handle_new_user function + on_auth_user_created trigger)
-- [ ] T007 **USE SUPABASE MCP**: Verify migrations applied successfully using `mcp__supabase__list_migrations` for project iitxfjhnywekstxagump
-- [ ] T008 **USE SUPABASE MCP**: Add foreign key constraint to profiles table using `mcp__supabase__apply_migration` with name `add_profiles_foreign_key` to link profiles.id → auth.users.id with CASCADE DELETE
-- [ ] T009 **USE SUPABASE MCP**: Generate TypeScript types using `mcp__supabase__generate_typescript_types` for project iitxfjhnywekstxagump and save to `src/types/supabase.ts`
+- [X] T005 **USE SUPABASE MCP**: Create auth_events table migration using `mcp__supabase__apply_migration` with name `add_auth_events_table` and SQL from data-model.md section 4
+- [X] T006 **USE SUPABASE MCP**: Create profile trigger migration using `mcp__supabase__apply_migration` with name `add_profile_trigger` and SQL from data-model.md section 2 (handle_new_user function + on_auth_user_created trigger)
+- [X] T007 **USE SUPABASE MCP**: Verify migrations applied successfully using `mcp__supabase__list_migrations` for project iitxfjhnywekstxagump
+- [X] T008 **USE SUPABASE MCP**: Add foreign key constraint to profiles table using `mcp__supabase__apply_migration` with name `add_profiles_foreign_key` to link profiles.id → auth.users.id with CASCADE DELETE
+- [X] T009 **USE SUPABASE MCP**: Generate TypeScript types using `mcp__supabase__generate_typescript_types` for project iitxfjhnywekstxagump and save to `src/types/supabase.ts`
 
 ### Supabase Client Setup
 

@@ -44,10 +44,10 @@
 
 ### Supabase Client Setup
 
-- [ ] T010 [P] **USE CONTEXT7**: Fetch @supabase/ssr documentation using `mcp__context7__resolve-library-id` for "@supabase/ssr" then `mcp__context7__get-library-docs` focused on "createServerClient" and "createBrowserClient" patterns
-- [ ] T011 Create server Supabase client utility in `src/lib/supabase/server.ts` implementing createServerClient with cookie management per research.md section 2
-- [ ] T012 Create browser Supabase client utility in `src/lib/supabase/client.ts` implementing createBrowserClient per research.md section 2
-- [ ] T013 Create Supabase middleware helper in `src/lib/supabase/middleware.ts` for token refresh using updateSession pattern from research.md section 2
+- [X] T010 [P] **USE CONTEXT7**: Fetch @supabase/ssr documentation using `mcp__context7__resolve-library-id` for "@supabase/ssr" then `mcp__context7__get-library-docs` focused on "createServerClient" and "createBrowserClient" patterns
+- [X] T011 Create server Supabase client utility in `src/lib/supabase/server.ts` implementing createServerClient with cookie management per research.md section 2
+- [X] T012 Create browser Supabase client utility in `src/lib/supabase/client.ts` implementing createBrowserClient per research.md section 2
+- [X] T013 Create Supabase middleware helper in `src/lib/supabase/middleware.ts` for token refresh using updateSession pattern from research.md section 2
 
 ### Rate Limiting Infrastructure
 

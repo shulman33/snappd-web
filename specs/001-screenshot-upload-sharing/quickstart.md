@@ -236,8 +236,8 @@ export async function createSignedUploadUrl(
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { generateFilePath, createSignedUploadUrl } from '@/lib/uploads/storage'
-import type { InitUploadRequest, InitUploadResponse } from '@/lib/uploads/types'
+import { generateFilePath, createSignedUploadUrl } from '@/src/lib/uploads/storage'
+import type { InitUploadRequest, InitUploadResponse } from '@/src/lib/uploads/types'
 
 export async function POST(request: NextRequest) {
   try {
@@ -340,7 +340,7 @@ export async function POST(request: NextRequest) {
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { encodeBase62 } from '@/lib/uploads/encoding'
+import { encodeBase62 } from '@/src/lib/uploads/encoding'
 
 export async function POST(
   request: NextRequest,

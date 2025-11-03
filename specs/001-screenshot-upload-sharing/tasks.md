@@ -17,9 +17,9 @@
 
 Using Next.js 15 App Router structure:
 - API routes: `app/api/`
-- Library modules: `lib/`
+- Library modules: `src/lib/`
 - Database migrations: `supabase/migrations/`
-- Type definitions: `lib/supabase/types.ts`
+- Type definitions: `src/types/supabase.ts`
 
 ---
 
@@ -27,10 +27,10 @@ Using Next.js 15 App Router structure:
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Use context7 to fetch latest Next.js 15 App Router documentation for API route patterns
-- [ ] T002 Use context7 to fetch latest @supabase/supabase-js documentation for storage and database APIs
-- [ ] T003 [P] Install required dependencies: bcryptjs, @upstash/ratelimit, @upstash/redis in package.json
-- [ ] T004 [P] Create library module structure: lib/uploads/, lib/analytics/, lib/supabase/
+- [X] T001 Use context7 to fetch latest Next.js 15 App Router documentation for API route patterns
+- [X] T002 Use context7 to fetch latest @supabase/supabase-js documentation for storage and database APIs
+- [X] T003 [P] Install required dependencies: bcryptjs, @upstash/ratelimit, @upstash/redis in package.json
+- [X] T004 [P] Create library module structure: src/lib/uploads/, src/lib/analytics/, src/lib/supabase/
 
 ---
 
@@ -40,26 +40,26 @@ Using Next.js 15 App Router structure:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Use Supabase MCP list_migrations to review existing database migrations
-- [ ] T006 Create migration supabase/migrations/20251103000001_screenshot_upload_schema.sql to add new columns to screenshots table (file_hash, sharing_mode, password_hash, thumbnail_path, optimized_path, processing_status, processing_error)
-- [ ] T007 [P] Create migration supabase/migrations/20251103000002_view_events_table.sql for analytics tracking
-- [ ] T008 [P] Create migration supabase/migrations/20251103000003_daily_view_stats_table.sql for pre-aggregated analytics
-- [ ] T009 [P] Create migration supabase/migrations/20251103000004_upload_sessions_table.sql for resumable uploads
-- [ ] T010 Create migration supabase/migrations/20251103000005_quota_triggers.sql for quota enforcement and usage tracking triggers
-- [ ] T011 Create migration supabase/migrations/20251103000006_rls_policies.sql for screenshot and analytics RLS policies
-- [ ] T012 Use Supabase MCP apply_migration to run migration 20251103000001_screenshot_upload_schema.sql
-- [ ] T013 Use Supabase MCP apply_migration to run migration 20251103000002_view_events_table.sql
-- [ ] T014 Use Supabase MCP apply_migration to run migration 20251103000003_daily_view_stats_table.sql
-- [ ] T015 Use Supabase MCP apply_migration to run migration 20251103000004_upload_sessions_table.sql
-- [ ] T016 Use Supabase MCP apply_migration to run migration 20251103000005_quota_triggers.sql
-- [ ] T017 Use Supabase MCP apply_migration to run migration 20251103000006_rls_policies.sql
-- [ ] T018 Use Supabase MCP generate_typescript_types to create updated type definitions in lib/supabase/types.ts
-- [ ] T019 [P] Create base upload types in lib/uploads/types.ts (InitUploadRequest, InitUploadResponse, CompleteUploadRequest, CompleteUploadResponse)
-- [ ] T020 [P] Implement base62 encoding utilities in lib/uploads/encoding.ts (encodeBase62, decodeBase62)
-- [ ] T021 [P] Implement file hashing utilities in lib/uploads/hash.ts using Web Crypto API SHA-256
-- [ ] T022 Create Supabase client helpers in lib/supabase/client.ts and lib/supabase/server.ts
-- [ ] T023 Use Supabase MCP list_tables to verify all tables created correctly
-- [ ] T024 Use Supabase MCP get_advisors for security and performance recommendations after schema changes
+- [X] T005 Use Supabase MCP list_migrations to review existing database migrations
+- [X] T006 Create migration supabase/migrations/20251103000001_screenshot_upload_schema.sql to add new columns to screenshots table (file_hash, sharing_mode, password_hash, thumbnail_path, optimized_path, processing_status, processing_error)
+- [X] T007 [P] Create migration supabase/migrations/20251103000002_view_events_table.sql for analytics tracking
+- [X] T008 [P] Create migration supabase/migrations/20251103000003_daily_view_stats_table.sql for pre-aggregated analytics
+- [X] T009 [P] Create migration supabase/migrations/20251103000004_upload_sessions_table.sql for resumable uploads
+- [X] T010 Create migration supabase/migrations/20251103000005_quota_triggers.sql for quota enforcement and usage tracking triggers
+- [X] T011 Create migration supabase/migrations/20251103000006_rls_policies.sql for screenshot and analytics RLS policies
+- [X] T012 Use Supabase MCP apply_migration to run migration 20251103000001_screenshot_upload_schema.sql
+- [X] T013 Use Supabase MCP apply_migration to run migration 20251103000002_view_events_table.sql
+- [X] T014 Use Supabase MCP apply_migration to run migration 20251103000003_daily_view_stats_table.sql
+- [X] T015 Use Supabase MCP apply_migration to run migration 20251103000004_upload_sessions_table.sql
+- [X] T016 Use Supabase MCP apply_migration to run migration 20251103000005_quota_triggers.sql
+- [X] T017 Use Supabase MCP apply_migration to run migration 20251103000006_rls_policies.sql
+- [X] T018 Use Supabase MCP generate_typescript_types to create updated type definitions in src/types/supabase.ts
+- [X] T019 [P] Create base upload types in src/lib/uploads/types.ts (InitUploadRequest, InitUploadResponse, CompleteUploadRequest, CompleteUploadResponse)
+- [X] T020 [P] Implement base62 encoding utilities in src/lib/uploads/encoding.ts (encodeBase62, decodeBase62)
+- [X] T021 [P] Implement file hashing utilities in src/lib/uploads/hash.ts using Web Crypto API SHA-256
+- [X] T022 Create Supabase client helpers in src/lib/supabase/client.ts and src/lib/supabase/server.ts
+- [X] T023 Use Supabase MCP list_tables to verify all tables created correctly
+- [X] T024 Use Supabase MCP get_advisors for security and performance recommendations after schema changes
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -74,10 +74,10 @@ Using Next.js 15 App Router structure:
 ### Implementation for User Story 1
 
 - [ ] T025 [P] [US1] Use context7 to fetch @supabase/ssr documentation for server-side authentication patterns
-- [ ] T026 [P] [US1] Use context7 to fetch Supabase Storage createSignedUploadUrl documentation, then implement storage helpers in lib/uploads/storage.ts (generateFilePath, createSignedUploadUrl)
+- [ ] T026 [P] [US1] Use context7 to fetch Supabase Storage createSignedUploadUrl documentation, then implement storage helpers in src/lib/uploads/storage.ts (generateFilePath, createSignedUploadUrl)
 - [ ] T027 [US1] Create POST /api/upload/init route in app/api/upload/init/route.ts with quota checking and signed URL generation
 - [ ] T028 [US1] Use Supabase MCP execute_sql to test quota trigger behavior, then create POST /api/upload/[uploadSessionId]/complete route in app/api/upload/[uploadSessionId]/complete/route.ts
-- [ ] T029 [P] [US1] Use Supabase MCP execute_sql to query monthly_usage table structure, then create quota checking utilities in lib/uploads/quota.ts
+- [ ] T029 [P] [US1] Use Supabase MCP execute_sql to query monthly_usage table structure, then create quota checking utilities in src/lib/uploads/quota.ts
 - [ ] T030 [US1] Implement short ID generation and screenshot record creation in complete upload route
 - [ ] T031 [US1] Use context7 to fetch Next.js 15 dynamic routes documentation, then create share page in app/[shortId]/page.tsx for viewing public screenshots
 - [ ] T032 [P] [US1] Use Supabase MCP get_project_url to configure public URL for share links
@@ -155,7 +155,7 @@ Using Next.js 15 App Router structure:
 ### Implementation for User Story 5
 
 - [ ] T054 [P] [US5] Use context7 to fetch Supabase Storage image transformation API documentation with focus on getPublicUrl transform parameter
-- [ ] T055 [US5] Use context7 to fetch Supabase Storage CDN caching documentation, then implement image URL generation with transformations in lib/uploads/storage.ts
+- [ ] T055 [US5] Use context7 to fetch Supabase Storage CDN caching documentation, then implement image URL generation with transformations in src/lib/uploads/storage.ts
 - [ ] T056 [P] [US5] Use Supabase MCP execute_sql to update screenshot records with optimized_path and thumbnail_path after upload
 - [ ] T057 [US5] Use context7 to fetch Supabase Storage transformation best practices, then configure transformation parameters (quality: 75, format optimization)
 - [ ] T058 [US5] Create thumbnail URL generation helper (200x150px, cover mode)
@@ -196,7 +196,7 @@ Using Next.js 15 App Router structure:
 ### Implementation for User Story 7
 
 - [ ] T069 [P] [US7] Use context7 to fetch bcryptjs documentation for password hashing with focus on compare and hash functions
-- [ ] T070 [US7] Use context7 to fetch bcrypt best practices for cost factor selection, then implement password hashing in lib/uploads/security.ts using bcrypt (cost factor 10)
+- [ ] T070 [US7] Use context7 to fetch bcrypt best practices for cost factor selection, then implement password hashing in src/lib/uploads/security.ts using bcrypt (cost factor 10)
 - [ ] T071 [P] [US7] Use Supabase MCP execute_sql to verify password_hash column accepts bcrypt hashed values, then update upload init route to support password parameter for password-protected mode
 - [ ] T072 [US7] Use Supabase MCP execute_sql to test sharing_mode constraint validation, then add sharing mode validation to upload routes (public/private/password)
 - [ ] T073 [US7] Use context7 to fetch Next.js 15 middleware documentation for auth checks, then update share page to check sharing_mode and enforce access control
@@ -261,7 +261,7 @@ Using Next.js 15 App Router structure:
 ### Implementation for User Story 10
 
 - [ ] T095 [P] [US10] Use context7 to fetch Next.js 15 headers documentation for extracting x-forwarded-for, then create POST /api/share/[shortId]/track route in app/api/share/[shortId]/track/route.ts
-- [ ] T096 [US10] Use context7 to fetch Web Crypto API SHA-256 documentation, then implement IP hashing in lib/analytics/tracking.ts using SHA-256 with salt
+- [ ] T096 [US10] Use context7 to fetch Web Crypto API SHA-256 documentation, then implement IP hashing in src/lib/analytics/tracking.ts using SHA-256 with salt
 - [ ] T097 [P] [US10] Use context7 to fetch Vercel Edge runtime geolocation API documentation, then add IP geolocation using Vercel Edge runtime geolocation
 - [ ] T098 [US10] Use Supabase MCP execute_sql to test view_events insert with is_owner flag, then implement view event logging with owner detection (exclude owner views)
 - [ ] T099 [US10] Use context7 to fetch Supabase aggregation query patterns, then create GET /api/screenshots/[shortId]/analytics route in app/api/screenshots/[shortId]/analytics/route.ts
@@ -394,8 +394,8 @@ Using Next.js 15 App Router structure:
 ```bash
 # After Foundational phase completes, launch these in parallel:
 Task T025: "Use context7 to fetch @supabase/ssr documentation"
-Task T026: "Implement storage helpers in lib/uploads/storage.ts"
-Task T029: "Create quota checking utilities in lib/uploads/quota.ts"
+Task T026: "Implement storage helpers in src/lib/uploads/storage.ts"
+Task T029: "Create quota checking utilities in src/lib/uploads/quota.ts"
 Task T032: "Use Supabase MCP get_project_url to configure public URL"
 
 # Then proceed with dependent tasks:

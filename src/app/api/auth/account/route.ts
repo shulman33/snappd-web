@@ -35,6 +35,7 @@ import { deleteAccountSchema, type DeleteAccountInput } from '@/lib/schemas/auth
 import { AuthEventLogger, AuthEventType, getIpAddress, getUserAgent } from '@/lib/auth/logger';
 import { stripe } from '@/lib/stripe/customer';
 import type { Database } from '@/types/supabase';
+import { AuthErrorHandler, AuthErrorCode, createAuthError } from '@/lib/auth/errors';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -96,11 +97,9 @@ export async function DELETE(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json(
-        {
-          error: 'UNAUTHORIZED',
-          message: 'You must be logged in to delete your account',
-        },
+      throw createAuthError(
+        AuthErrorCode.UNAUTHORIZED,
+        'You must be logged in to delete your account',
         { status: 401 }
       );
     }
@@ -113,11 +112,9 @@ export async function DELETE(request: NextRequest) {
       .single();
 
     if (profileError || !profile) {
-      return NextResponse.json(
-        {
-          error: 'PROFILE_NOT_FOUND',
-          message: 'User profile not found',
-        },
+      throw createAuthError(
+        AuthErrorCode.NOT_FOUND,
+        'User profile not found',
         { status: 404 }
       );
     }
@@ -125,35 +122,8 @@ export async function DELETE(request: NextRequest) {
     // =========================================================================
     // 2. Parse and validate request body
     // =========================================================================
-    let body: DeleteAccountInput;
-    try {
-      const rawBody = await request.json();
-      const result = deleteAccountSchema.safeParse(rawBody);
-
-      if (!result.success) {
-        return NextResponse.json(
-          {
-            error: 'VALIDATION_ERROR',
-            message: 'Invalid input',
-            details: result.error.issues.map((err) => ({
-              field: err.path.join('.'),
-              message: err.message,
-            })),
-          },
-          { status: 400 }
-        );
-      }
-
-      body = result.data;
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: 'INVALID_JSON',
-          message: 'Invalid JSON in request body',
-        },
-        { status: 400 }
-      );
-    }
+    const rawBody = await request.json();
+    const body: DeleteAccountInput = deleteAccountSchema.parse(rawBody);
 
     // =========================================================================
     // 3. Verify password OR OAuth re-authentication
@@ -164,13 +134,18 @@ export async function DELETE(request: NextRequest) {
     const hasPassword = user.app_metadata?.provider === 'email';
 
     if (hasPassword) {
-      // Password-authenticated user: verify password
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email!,
-        password: body.password,
-      });
+      // Password-authenticated user: verify password using secure database function
+      // This verifies the password WITHOUT creating a new session (avoiding session pollution)
+      // Uses the verify_user_password() function which securely compares bcrypt hashes
+      const { data: isPasswordValid, error: verifyError } = await serviceSupabase.rpc(
+        'verify_user_password',
+        {
+          user_email: user.email!,
+          user_password: body.password,
+        }
+      );
 
-      if (signInError) {
+      if (verifyError || !isPasswordValid) {
         // Log failed deletion attempt
         await AuthEventLogger.log({
           eventType: AuthEventType.LOGIN_FAILURE,
@@ -181,28 +156,22 @@ export async function DELETE(request: NextRequest) {
           metadata: { reason: 'invalid_credentials', action: 'account_deletion_attempt' },
         });
 
-        return NextResponse.json(
-          {
-            error: 'INVALID_PASSWORD',
-            message: 'Invalid password. Please try again.',
-          },
+        throw createAuthError(
+          AuthErrorCode.INVALID_CREDENTIALS,
+          'Invalid password. Please try again.',
           { status: 403 }
         );
       }
     } else {
-      // OAuth-only user: Check for OAuth identities
-      const { data: identities, error: identitiesError } = await serviceSupabase
-        .from('auth.identities')
-        .select('provider')
-        .eq('user_id', user.id);
+      // OAuth-only user: Check for OAuth identities using Admin API
+      const { data: userData, error: userDataError } = await serviceSupabase.auth.admin.getUserById(
+        user.id
+      );
 
-      if (identitiesError || !identities || identities.length === 0) {
-        return NextResponse.json(
-          {
-            error: 'AUTHENTICATION_REQUIRED',
-            message:
-              'OAuth re-authentication required. Please sign in with your OAuth provider before deleting your account.',
-          },
+      if (userDataError || !userData?.user?.identities || userData.user.identities.length === 0) {
+        throw createAuthError(
+          AuthErrorCode.UNAUTHORIZED,
+          'OAuth re-authentication required. Please sign in with your OAuth provider before deleting your account.',
           { status: 403 }
         );
       }
@@ -253,89 +222,70 @@ export async function DELETE(request: NextRequest) {
     }
 
     // =========================================================================
-    // 6. Delete all user screenshots from storage (T114, T114a)
+    // 6. Delete user data atomically using PostgreSQL transaction (T114-T117)
     // =========================================================================
+    // This uses a database function to ensure all-or-nothing deletion
+    // If any step fails, ALL database changes are rolled back automatically
+    let storagePaths: string[] = [];
+
     try {
-      // Fetch all screenshot records for this user
-      const { data: screenshots, error: screenshotsError } = await serviceSupabase
-        .from('screenshots')
-        .select('storage_path')
-        .eq('user_id', user.id);
+      const { data: deletionResult, error: deleteError } = await serviceSupabase.rpc(
+        'delete_user_data',
+        {
+          target_user_id: user.id,
+        }
+      );
 
-      if (screenshotsError) {
-        console.error('Failed to fetch user screenshots:', screenshotsError);
-      } else if (screenshots && screenshots.length > 0) {
-        // Extract storage paths
-        const storagePaths = screenshots.map((s) => s.storage_path);
+      if (deleteError) {
+        console.error('Failed to delete user data (transaction rolled back):', deleteError);
+        throw createAuthError(
+          AuthErrorCode.INTERNAL_ERROR,
+          'Failed to delete account data. Please contact support.',
+          { status: 500 }
+        );
+      }
 
-        // Delete files from storage bucket
+      // Extract storage paths from the deletion result for cleanup
+      storagePaths = deletionResult.storage_paths || [];
+
+      console.log('Atomically deleted user data:', {
+        screenshots: deletionResult.screenshots_deleted,
+        monthly_usage: deletionResult.monthly_usage_deleted,
+        auth_events: deletionResult.auth_events_deleted,
+        profile: deletionResult.profile_deleted,
+        storage_files: storagePaths.length,
+      });
+    } catch (error: any) {
+      console.error('Error during atomic deletion:', error);
+      throw createAuthError(
+        AuthErrorCode.INTERNAL_ERROR,
+        'Failed to delete account. Please contact support.',
+        { status: 500 }
+      );
+    }
+
+    // =========================================================================
+    // 7. Delete screenshots from storage (T114a)
+    // =========================================================================
+    // Note: Storage operations are NOT transactional and happen AFTER database deletion
+    // If this fails, files will be orphaned but can be cleaned up by background job
+    if (storagePaths.length > 0) {
+      try {
         const { error: storageError } = await supabase.storage
           .from('screenshots')
           .remove(storagePaths);
 
         if (storageError) {
           console.error('Failed to delete screenshots from storage:', storageError);
-          // Continue with deletion - files will be orphaned but account will be deleted
+          // Don't fail the entire operation - files are orphaned but account is deleted
+          // These can be cleaned up by a background job
         } else {
           console.log(`Deleted ${storagePaths.length} screenshots from storage`);
         }
+      } catch (storageError) {
+        console.error('Error deleting screenshots from storage:', storageError);
+        // Continue - account deletion succeeded even if storage cleanup failed
       }
-    } catch (storageError) {
-      console.error('Error deleting screenshots:', storageError);
-      // Continue with deletion
-    }
-
-    // =========================================================================
-    // 7. Delete user data (T115, T116, T117)
-    // =========================================================================
-
-    // T116: Delete monthly_usage records
-    try {
-      const { error: usageError } = await serviceSupabase
-        .from('monthly_usage')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (usageError) {
-        console.error('Failed to delete monthly_usage records:', usageError);
-      } else {
-        console.log('Deleted monthly_usage records');
-      }
-    } catch (error) {
-      console.error('Error deleting monthly_usage:', error);
-    }
-
-    // T117: Delete authentication events (user_id will be SET NULL due to foreign key constraint)
-    // This preserves audit log integrity while anonymizing the data
-    try {
-      const { error: eventsError } = await serviceSupabase
-        .from('auth_events')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (eventsError) {
-        console.error('Failed to delete auth_events:', eventsError);
-      } else {
-        console.log('Deleted auth_events');
-      }
-    } catch (error) {
-      console.error('Error deleting auth_events:', error);
-    }
-
-    // T115: Delete profile record (will cascade from auth.users deletion, but do explicitly for clarity)
-    try {
-      const { error: profileDeleteError } = await serviceSupabase
-        .from('profiles')
-        .delete()
-        .eq('id', user.id);
-
-      if (profileDeleteError) {
-        console.error('Failed to delete profile:', profileDeleteError);
-      } else {
-        console.log('Deleted profile');
-      }
-    } catch (error) {
-      console.error('Error deleting profile:', error);
     }
 
     // =========================================================================
@@ -359,16 +309,13 @@ export async function DELETE(request: NextRequest) {
     // =========================================================================
     // This is the final, irreversible step
     // All related records (profiles, screenshots, identities) will cascade delete
-    const { error: deleteUserError } = await supabase.auth.admin.deleteUser(user.id);
+    const { error: deleteUserError } = await serviceSupabase.auth.admin.deleteUser(user.id);
 
     if (deleteUserError) {
       console.error('Failed to delete user from auth.users:', deleteUserError);
-      return NextResponse.json(
-        {
-          error: 'DELETION_FAILED',
-          message: 'Failed to delete account. Please contact support.',
-          details: deleteUserError.message,
-        },
+      throw createAuthError(
+        AuthErrorCode.INTERNAL_ERROR,
+        'Failed to delete account. Please contact support.',
         { status: 500 }
       );
     }
@@ -404,8 +351,6 @@ export async function DELETE(request: NextRequest) {
       { status: 200 }
     );
   } catch (error: any) {
-    console.error('Unexpected error during account deletion:', error);
-
     // Log the error event
     try {
       await AuthEventLogger.log({
@@ -422,12 +367,10 @@ export async function DELETE(request: NextRequest) {
       console.error('Failed to log error event:', logError);
     }
 
-    return NextResponse.json(
-      {
-        error: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred. Please try again later.',
-      },
-      { status: 500 }
-    );
+    // Handle all errors (including Zod validation, custom auth errors, and unexpected errors)
+    return AuthErrorHandler.handle(error, {
+      includeDetails: process.env.NODE_ENV !== 'production',
+      logContext: { route: 'DELETE /api/auth/account' },
+    });
   }
 }

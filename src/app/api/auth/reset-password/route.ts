@@ -14,6 +14,7 @@ import { resetPasswordRequestSchema } from '@/lib/schemas/auth';
 import { passwordResetLimiter } from '@/lib/auth/rate-limit';
 import { AuthEventLogger, AuthEventType } from '@/lib/auth/logger';
 import { getIpAddress, getUserAgent } from '@/lib/auth/logger';
+import { AuthErrorHandler, AuthErrorCode, createAuthError } from '@/lib/auth/errors';
 
 /**
  * Configuration for exponential backoff retry logic
@@ -90,23 +91,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request body
     const body = await request.json();
-    const validation = resetPasswordRequestSchema.safeParse(body);
-
-    if (!validation.success) {
-      return NextResponse.json(
-        {
-          error: 'VALIDATION_ERROR',
-          message: 'Invalid email address',
-          details: validation.error.issues.map((err) => ({
-            field: err.path.join('.'),
-            message: err.message,
-          })),
-        },
-        { status: 400 }
-      );
-    }
-
-    const { email } = validation.data;
+    const { email } = resetPasswordRequestSchema.parse(body);
 
     // Check rate limit (3 requests per hour)
     const { success: rateLimitPassed, reset } = await passwordResetLimiter.limit(email);
@@ -114,22 +99,10 @@ export async function POST(request: NextRequest) {
     if (!rateLimitPassed) {
       const retryAfter = Math.ceil((reset - Date.now()) / 1000);
 
-      return NextResponse.json(
-        {
-          error: 'RATE_LIMIT_EXCEEDED',
-          message:
-            'Too many password reset requests. Please try again later or contact support if you need immediate assistance.',
-          retryAfter,
-        },
-        {
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': '3',
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': new Date(reset).toISOString(),
-            'Retry-After': retryAfter.toString(),
-          },
-        }
+      throw createAuthError(
+        AuthErrorCode.RATE_LIMIT_EXCEEDED,
+        'Too many password reset requests. Please try again later or contact support if you need immediate assistance.',
+        { status: 429, retryAfter }
       );
     }
 
@@ -156,14 +129,9 @@ export async function POST(request: NextRequest) {
 
     // Handle email delivery failure
     if (!emailResult.success) {
-      return NextResponse.json(
-        {
-          error: 'EMAIL_DELIVERY_FAILED',
-          message:
-            'We were unable to send the password reset email after multiple attempts. Please verify your email address is correct, or try again later. If the problem persists, contact support.',
-          supportEmail: 'support@snappd.app',
-          canRetry: true,
-        },
+      throw createAuthError(
+        AuthErrorCode.EMAIL_DELIVERY_FAILED,
+        'We were unable to send the password reset email after multiple attempts. Please verify your email address is correct, or try again later. If the problem persists, contact support.',
         { status: 500 }
       );
     }
@@ -179,14 +147,10 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error in POST /api/auth/reset-password:', error);
-
-    return NextResponse.json(
-      {
-        error: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred. Please try again.',
-      },
-      { status: 500 }
-    );
+    // Handle all errors (including Zod validation, custom auth errors, and unexpected errors)
+    return AuthErrorHandler.handle(error, {
+      includeDetails: process.env.NODE_ENV !== 'production',
+      logContext: { route: 'POST /api/auth/reset-password' },
+    });
   }
 }

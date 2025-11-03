@@ -9,10 +9,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
-import { signupSchema, formatZodError } from '@/lib/schemas/auth';
+import { signupSchema } from '@/lib/schemas/auth';
 import { AuthEventLogger, AuthEventType, getIpAddress, getUserAgent } from '@/lib/auth/logger';
 import { accountRateLimiter } from '@/lib/auth/rate-limit';
-import { ZodError } from 'zod';
+import { AuthErrorHandler, AuthErrorCode, createAuthError } from '@/lib/auth/errors';
 
 /**
  * POST /api/auth/signup
@@ -69,18 +69,10 @@ export async function POST(request: NextRequest) {
         userAgent || undefined
       );
 
-      return NextResponse.json(
-        {
-          error: 'ACCOUNT_LOCKED',
-          message: 'Too many signup attempts. Your account is temporarily locked for 15 minutes.',
-          retryAfter: Math.ceil((reset - Date.now()) / 1000),
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': Math.ceil((reset - Date.now()) / 1000).toString(),
-          },
-        }
+      throw createAuthError(
+        AuthErrorCode.ACCOUNT_LOCKED,
+        'Too many signup attempts. Your account is temporarily locked for 15 minutes.',
+        { status: 429, retryAfter: Math.ceil((reset - Date.now()) / 1000) }
       );
     }
 
@@ -114,11 +106,9 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        return NextResponse.json(
-          {
-            error: 'EMAIL_EXISTS',
-            message: 'An account with this email address already exists. Please try signing in instead.',
-          },
+        throw createAuthError(
+          AuthErrorCode.EMAIL_EXISTS,
+          'An account with this email address already exists. Please try signing in instead.',
           { status: 409 }
         );
       }
@@ -135,11 +125,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return NextResponse.json(
-        {
-          error: 'INTERNAL_ERROR',
-          message: 'Failed to create account. Please try again later.',
-        },
+      throw createAuthError(
+        AuthErrorCode.INTERNAL_ERROR,
+        'Failed to create account. Please try again later.',
         { status: 500 }
       );
     }
@@ -156,11 +144,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return NextResponse.json(
-        {
-          error: 'INTERNAL_ERROR',
-          message: 'Failed to create user profile. Please try again later.',
-        },
+      throw createAuthError(
+        AuthErrorCode.PROFILE_CREATION_FAILED,
+        'Failed to create user profile. Please try again later.',
         { status: 500 }
       );
     }
@@ -193,27 +179,10 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    // Handle Zod validation errors
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        {
-          error: 'VALIDATION_ERROR',
-          message: 'Invalid input data',
-          details: formatZodError(error),
-        },
-        { status: 400 }
-      );
-    }
-
-    // Handle unexpected errors
-    console.error('Unexpected error in signup route:', error);
-
-    return NextResponse.json(
-      {
-        error: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred. Please try again later.',
-      },
-      { status: 500 }
-    );
+    // Handle all errors (including Zod validation, custom auth errors, and unexpected errors)
+    return AuthErrorHandler.handle(error, {
+      includeDetails: process.env.NODE_ENV !== 'production',
+      logContext: { route: 'POST /api/auth/signup' },
+    });
   }
 }

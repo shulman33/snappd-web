@@ -200,7 +200,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      delete_user_data: {
+        Args: { target_user_id: string }
+        Returns: {
+          screenshots_deleted: number
+          monthly_usage_deleted: number
+          auth_events_deleted: number
+          profile_deleted: number
+          storage_paths: string[]
+        }
+      }
+      verify_user_password: {
+        Args: { user_email: string; user_password: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

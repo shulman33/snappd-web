@@ -11,9 +11,11 @@
  * @see {@link https://nextjs.org/docs/app/building-your-application/routing/middleware}
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, NextFetchEvent } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { ipRateLimiter } from '@/lib/auth/rate-limit';
 import { updateSession } from '@/lib/supabase/middleware';
+import type { Database } from '@/types/supabase';
 
 /**
  * Protected routes that require authentication
@@ -33,8 +35,11 @@ const authRoutes = ['/login', '/signup'];
  * 2. Check protected routes and redirect if unauthenticated
  * 3. Apply IP-based rate limiting to auth endpoints
  * 4. Add CORS headers for browser extension support
+ *
+ * @param request - The incoming Next.js request object
+ * @param event - The Next.js fetch event for handling background operations
  */
-export async function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
 
   // =========================================================================
@@ -57,12 +62,25 @@ export async function middleware(request: NextRequest) {
     );
     const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
 
-    // Check if user is authenticated by examining the session
-    // The updateSession call above has already validated and refreshed the token
-    const sessionCookie = supabaseResponse.cookies.get(
-      `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`
+    // Check if user is authenticated using Supabase's getUser() API
+    // This is the recommended approach per Supabase documentation
+    // Avoids fragile cookie name parsing and handles all edge cases
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => request.cookies.getAll().map(cookie => ({
+            name: cookie.name,
+            value: cookie.value
+          })),
+          setAll: () => {}, // No-op, cookies already set by updateSession
+        },
+      }
     );
-    const hasSession = !!sessionCookie;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const hasSession = !!user;
 
     // Redirect unauthenticated users from protected routes to login
     if (isProtectedRoute && !hasSession) {
@@ -95,15 +113,10 @@ export async function middleware(request: NextRequest) {
     const { success, limit, remaining, reset, pending } = await ipRateLimiter.limit(ip);
 
     // Handle pending analytics (required when analytics: true)
-    // In edge runtime, we don't have access to context.waitUntil,
-    // but the promise will be handled automatically
-    if (pending) {
-      // Pending promise for analytics submission
-      // This is fire-and-forget in edge runtime
-      pending.catch((err) => {
-        console.error('Failed to submit rate limit analytics:', err);
-      });
-    }
+    // Use NextFetchEvent.waitUntil() to properly manage the promise lifecycle
+    // This ensures analytics are submitted without blocking the response
+    // and prevents memory leaks from unhandled promises
+    event.waitUntil(pending);
 
     // If rate limit exceeded, return 429 with appropriate headers
     if (!success) {

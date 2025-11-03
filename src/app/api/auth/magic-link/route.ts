@@ -21,7 +21,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { magicLinkRequestSchema } from '@/lib/schemas/auth';
 import { magicLinkLimiter } from '@/lib/auth/rate-limit';
 import { AuthEventLogger, AuthEventType, getIpAddress, getUserAgent } from '@/lib/auth/logger';
-import { ZodError } from 'zod';
+import { AuthErrorHandler, AuthErrorCode, createAuthError } from '@/lib/auth/errors';
 
 /**
  * Exponential backoff helper for email delivery
@@ -92,21 +92,10 @@ export async function POST(request: NextRequest) {
     // Rate limiting - 5 requests per hour per email
     const rateLimitResult = await magicLinkLimiter.limit(email);
     if (!rateLimitResult.success) {
-      return NextResponse.json(
-        {
-          error: 'RATE_LIMIT_EXCEEDED',
-          message: 'Too many magic link requests. Please try again in an hour.',
-          retryAfter: Math.ceil((rateLimitResult.reset - Date.now()) / 1000),
-        },
-        {
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
-            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-            'X-RateLimit-Reset': new Date(rateLimitResult.reset).toISOString(),
-            'Retry-After': Math.ceil((rateLimitResult.reset - Date.now()) / 1000).toString(),
-          },
-        }
+      throw createAuthError(
+        AuthErrorCode.RATE_LIMIT_EXCEEDED,
+        'Too many magic link requests. Please try again in an hour.',
+        { status: 429, retryAfter: Math.ceil((rateLimitResult.reset - Date.now()) / 1000) }
       );
     }
 
@@ -131,18 +120,9 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return NextResponse.json(
-        {
-          error: 'EMAIL_DELIVERY_FAILED',
-          message:
-            'Failed to send magic link email after multiple attempts. Please verify your email address or contact support.',
-          details: [
-            {
-              field: 'email',
-              message: 'Could not deliver email to this address',
-            },
-          ],
-        },
+      throw createAuthError(
+        AuthErrorCode.EMAIL_DELIVERY_FAILED,
+        'Failed to send magic link email after multiple attempts. Please verify your email address or contact support.',
         { status: 500 }
       );
     }
@@ -170,29 +150,10 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    // Handle validation errors
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        {
-          error: 'VALIDATION_ERROR',
-          message: 'Invalid request data',
-          details: error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message,
-          })),
-        },
-        { status: 400 }
-      );
-    }
-
-    // Handle unexpected errors
-    console.error('Magic link request error:', error);
-    return NextResponse.json(
-      {
-        error: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred. Please try again later.',
-      },
-      { status: 500 }
-    );
+    // Handle all errors (including Zod validation, custom auth errors, and unexpected errors)
+    return AuthErrorHandler.handle(error, {
+      includeDetails: process.env.NODE_ENV !== 'production',
+      logContext: { route: 'POST /api/auth/magic-link' },
+    });
   }
 }

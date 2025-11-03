@@ -155,31 +155,25 @@
 
 ## Phase 6: User Story 4 - Social OAuth Authentication (Priority: P2)
 
-**Goal**: Enable users to register/log in using Google or GitHub accounts for passwordless convenience
+**Goal**: Enable users to register/log in using Google accounts for passwordless convenience
 
-**Independent Test**: Click "Continue with Google/GitHub", authorize permissions, return to Snappd with authenticated session and auto-created profile
+**Independent Test**: Click "Continue with Google", authorize permissions, return to Snappd with authenticated session and auto-created profile
 
 ### Implementation for User Story 4
 
-- [ ] T059 [P] [US4] **USE SUPABASE MCP**: Review Supabase docs for OAuth using `mcp__supabase__search_docs` with GraphQL query for "signInWithOAuth Google GitHub providers"
-- [ ] T060 [P] [US4] Configure Google OAuth credentials in Supabase dashboard per quickstart.md OAuth Provider Setup section
-- [ ] T061 [P] [US4] Configure GitHub OAuth credentials in Supabase dashboard per quickstart.md OAuth Provider Setup section
-- [ ] T059a [P] [US4] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "OAuth providers and signInWithOAuth"
-- [ ] T062 [US4] Implement GET /api/auth/callback/google route handler in `src/app/api/auth/callback/google/route.ts` for OAuth callback with authorization code exchange and session creation
-- [ ] T063 [US4] Add account linking logic in Google callback route to link OAuth provider to existing account when emails match per FR-041
-- [ ] T064 [US4] Add automatic account creation in Google callback route for new OAuth users per FR-042
-- [ ] T065 [US4] Extract user email and name from Google OAuth provider response and store in profiles.full_name per FR-040
-- [ ] T066 [US4] Add auth event logging for oauth_linked events with provider=google metadata
-- [ ] T067 [P] [US4] Implement GET /api/auth/callback/github route handler in `src/app/api/auth/callback/github/route.ts` mirroring Google OAuth callback logic
-- [ ] T068 [US4] Add account linking logic in GitHub callback route to link OAuth provider to existing account when emails match
-- [ ] T069 [US4] Add automatic account creation in GitHub callback route for new OAuth users
-- [ ] T070 [US4] Extract user email and name from GitHub OAuth provider response
-- [ ] T071 [US4] Add auth event logging for oauth_linked events with provider=github metadata
-- [ ] T072 [US4] Add OAuth error handling for malformed provider responses per edge case "Malformed OAuth Responses"
-- [ ] T073 [US4] Validate all OAuth responses and reject invalid data with security event logging per FR-043
-- [ ] T074 [US4] **USE SUPABASE MCP**: Verify OAuth identities stored in auth.identities table using `mcp__supabase__execute_sql` to query provider links
+- [X] T059 [P] [US4] **USE SUPABASE MCP**: Review Supabase docs for OAuth using `mcp__supabase__search_docs` with GraphQL query for "signInWithOAuth Google provider"
+- [X] T060 [US4] Configure Google OAuth credentials in Supabase dashboard per quickstart.md OAuth Provider Setup section
+- [X] T059a [P] [US4] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "OAuth providers and signInWithOAuth"
+- [X] T062 [US4] Implement GET /api/auth/callback/google route handler in `src/app/api/auth/callback/google/route.ts` for OAuth callback with authorization code exchange and session creation
+- [X] T063 [US4] Add account linking logic in Google callback route to link OAuth provider to existing account when emails match per FR-041
+- [X] T064 [US4] Add automatic account creation in Google callback route for new OAuth users per FR-042
+- [X] T065 [US4] Extract user email and name from Google OAuth provider response and store in profiles.full_name per FR-040
+- [X] T066 [US4] Add auth event logging for oauth_linked events with provider=google metadata
+- [X] T067 [US4] Add OAuth error handling for malformed provider responses per edge case "Malformed OAuth Responses"
+- [X] T068 [US4] Validate all OAuth responses and reject invalid data with security event logging per FR-043
+- [X] T069 [US4] **USE SUPABASE MCP**: Verify OAuth identities stored in auth.identities table using `mcp__supabase__execute_sql` to query provider links
 
-**Checkpoint**: OAuth authentication functional - users can authenticate via Google and GitHub
+**Checkpoint**: OAuth authentication functional - users can authenticate via Google
 
 ---
 
@@ -191,18 +185,18 @@
 
 ### Implementation for User Story 5
 
-- [ ] T075 [P] [US5] **USE SUPABASE MCP**: Review Supabase docs for magic links using `mcp__supabase__search_docs` with GraphQL query for "signInWithOtp magic link email"
-- [ ] T075a [P] [US5] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "signInWithOtp and magic links"
-- [ ] T076 [US5] Implement POST /api/auth/magic-link route handler in `src/app/api/auth/magic-link/route.ts` with magicLinkSchema validation, magicLinkLimiter rate limiting (5/hr), and supabase.auth.signInWithOtp()
-- [ ] T077 [US5] Add automatic account creation in magic-link route for new users per acceptance scenario 2
-- [ ] T078 [US5] Add exponential backoff retry logic for magic link email delivery failures (3 attempts: immediate, 2min, 5min)
-- [ ] T079 [US5] Add auth event logging for magic_link_sent events with expires_at metadata
-- [ ] T080 [P] [US5] Implement GET /api/auth/magic-link/callback route handler in `src/app/api/auth/magic-link/callback/route.ts` for magic link verification
-- [ ] T081 [US5] Add token expiration check in magic-link/callback ensuring tokens valid for max 15 minutes per acceptance scenario 4
-- [ ] T082 [US5] Add single-use token enforcement in magic-link/callback per FR-036
-- [ ] T083 [US5] Handle existing active sessions gracefully in magic-link/callback allowing login without disrupting other sessions per acceptance scenario 5
-- [ ] T084 [US5] Add auth event logging for magic_link_used events with link_age_seconds metadata
-- [ ] T085 [US5] **USE SUPABASE MCP**: Test magic link expiration and single-use enforcement using `mcp__supabase__execute_sql`
+- [X] T075 [P] [US5] **USE SUPABASE MCP**: Review Supabase docs for magic links using `mcp__supabase__search_docs` with GraphQL query for "signInWithOtp magic link email"
+- [X] T075a [P] [US5] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "signInWithOtp and magic links"
+- [X] T076 [US5] Implement POST /api/auth/magic-link route handler in `src/app/api/auth/magic-link/route.ts` with magicLinkSchema validation, magicLinkLimiter rate limiting (5/hr), and supabase.auth.signInWithOtp()
+- [X] T077 [US5] Add automatic account creation in magic-link route for new users per acceptance scenario 2
+- [X] T078 [US5] Add exponential backoff retry logic for magic link email delivery failures (3 attempts: immediate, 2min, 5min)
+- [X] T079 [US5] Add auth event logging for magic_link_sent events with expires_at metadata
+- [X] T080 [P] [US5] Implement GET /api/auth/magic-link/callback route handler in `src/app/api/auth/magic-link/callback/route.ts` for magic link verification
+- [X] T081 [US5] Add token expiration check in magic-link/callback ensuring tokens valid for max 15 minutes per acceptance scenario 4
+- [X] T082 [US5] Add single-use token enforcement in magic-link/callback per FR-036
+- [X] T083 [US5] Handle existing active sessions gracefully in magic-link/callback allowing login without disrupting other sessions per acceptance scenario 5
+- [X] T084 [US5] Add auth event logging for magic_link_used events with link_age_seconds metadata
+- [X] T085 [US5] **USE SUPABASE MCP**: Test magic link expiration and single-use enforcement using `mcp__supabase__execute_sql`
 
 **Checkpoint**: Magic link authentication functional - passwordless login available
 
@@ -407,7 +401,7 @@
 2. Add US1 (Signup) → Test independently → Deploy/Demo (First increment!)
 3. Add US2 (Login) → Test independently → Deploy/Demo (Sessions working!)
 4. Add US3 (Reset) → Test independently → Deploy/Demo (MVP complete - all P1!)
-5. Add US4 (Google/GitHub OAuth) → Test independently → Deploy/Demo (P2 feature 1)
+5. Add US4 (Google OAuth) → Test independently → Deploy/Demo (P2 feature 1)
 6. Add US5 (Magic Links) → Test independently → Deploy/Demo (P2 complete!)
 7. Add US6 (Email Management) → Test independently → Deploy/Demo (P3 feature 1)
 8. Add US7 (Account Connections) → Test independently → Deploy/Demo (P3 feature 2)
@@ -540,14 +534,14 @@ Task: T030 - Implement resend endpoint
 
 ---
 
-## Total Task Count: 168 tasks (16 new Context7 documentation tasks added)
+## Total Task Count: 162 tasks (16 new Context7 documentation tasks added)
 
 - **Phase 1 (Setup)**: 5 tasks (added T003 for Zod docs)
 - **Phase 2 (Foundational)**: 24 tasks (added 7 Context7 tasks) ⚠️ BLOCKS ALL USER STORIES
 - **Phase 3 (US1 - Signup)**: 12 tasks (added T023a for @supabase/supabase-js docs)
 - **Phase 4 (US2 - Login)**: 16 tasks (added T033a for auth docs)
 - **Phase 5 (US3 - Password Reset)**: 12 tasks (added T048a for password reset docs)
-- **Phase 6 (US4 - OAuth)**: 17 tasks (added T059a for OAuth docs)
+- **Phase 6 (US4 - OAuth)**: 11 tasks (Google only - GitHub removed)
 - **Phase 7 (US5 - Magic Links)**: 12 tasks (added T075a for magic link docs)
 - **Phase 8 (US6 - Email Management)**: 12 tasks (added T086a for email update docs)
 - **Phase 9 (US7 - Account Connections)**: 12 tasks (added T097 for identities docs)
@@ -557,7 +551,7 @@ Task: T030 - Implement resend endpoint
 ### Tasks by Priority
 
 - **P1 (MVP)**: US1, US2, US3 = 40 implementation tasks (+ 29 foundational = 69 total for MVP)
-- **P2**: US4, US5 = 29 tasks
+- **P2**: US4, US5 = 23 tasks (Google OAuth only)
 - **P3**: US6, US7, US8 = 42 tasks
 
 ### Parallel Opportunities Identified

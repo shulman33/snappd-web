@@ -1,0 +1,626 @@
+openapi: 3.1.0
+info:
+  title: Snappd Authentication API
+  description: |
+    Comprehensive authentication system for Snappd screenshot sharing application.
+    Supports email/password, OAuth (Google, GitHub), and magic link authentication.
+
+    ## Security
+    - All endpoints use HTTPS only
+    - Session management via HTTP-only cookies
+    - CSRF protection with SameSite=Lax cookies
+    - Rate limiting on all authentication endpoints
+
+    ## Base URL
+    - Production: `https://app.snappd.io`
+    - Development: `http://localhost:3000`
+  version: 1.0.0
+  contact:
+    name: Snappd API Support
+    email: support@snappd.io
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://app.snappd.io
+    description: Production
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Authentication
+    description: User authentication operations
+  - name: Profile
+    description: User profile management
+  - name: OAuth
+    description: OAuth provider integration
+
+security:
+  - cookieAuth: []
+
+paths:
+  /api/auth/signup:
+    post:
+      summary: Register new user
+      description: |
+        Creates a new user account with email and password.
+        Sends verification email automatically.
+        Creates user profile with 'free' plan tier.
+      operationId: signup
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            examples:
+              basic:
+                summary: Basic signup
+                value:
+                  email: user@example.com
+                  password: SecurePass123!
+              withName:
+                summary: Signup with full name
+                value:
+                  email: user@example.com
+                  password: SecurePass123!
+                  fullName: John Doe
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: EMAIL_EXISTS
+                message: An account with this email already exists
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/auth/signin:
+    post:
+      summary: Sign in user
+      description: |
+        Authenticates user with email and password.
+        Returns session cookie on success.
+        Subject to dual-scope rate limiting (per-account + per-IP).
+      operationId: signin
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SigninRequest'
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              description: Session cookie
+              schema:
+                type: string
+                example: sb-access-token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; SameSite=Lax; Max-Age=604800
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigninResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: INVALID_CREDENTIALS
+                message: Invalid email or password
+        '403':
+          description: Email not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: EMAIL_NOT_VERIFIED
+                message: Please verify your email before logging in
+        '429':
+          description: Account locked or IP blocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/auth/signout:
+    post:
+      summary: Sign out user
+      description: |
+        Invalidates current session and clears session cookie.
+      operationId: signout
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Logout successful
+          headers:
+            Set-Cookie:
+              description: Cleared session cookie
+              schema:
+                type: string
+                example: sb-access-token=; Max-Age=0
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/reset-password:
+    post:
+      summary: Request password reset
+      description: |
+        Sends password reset email with time-limited token (1 hour).
+        Rate limited to 3 requests per hour per email.
+      operationId: resetPassword
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Reset email sent (or suppressed for security)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: If an account exists with this email, a password reset link has been sent
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '429':
+          description: Too many reset requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+
+  /api/auth/verify-email:
+    post:
+      summary: Verify email address
+      description: |
+        Confirms user email using token from verification email.
+        Token is single-use and expires after 24 hours.
+      operationId: verifyEmail
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email verified successfully
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: INVALID_TOKEN
+                message: Invalid or expired verification token
+
+  /api/auth/user:
+    get:
+      summary: Get current user
+      description: |
+        Returns currently authenticated user data.
+        Validates session token with Supabase Auth server.
+      operationId: getUser
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: User data retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/update-profile:
+    patch:
+      summary: Update user profile
+      description: |
+        Updates user profile information (full name, email).
+        Email changes require verification of both old and new addresses.
+      operationId: updateProfile
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/callback/google:
+    get:
+      summary: Google OAuth callback
+      description: |
+        Handles Google OAuth authorization callback.
+        Creates account if new user, links to existing account if email matches.
+      operationId: googleCallback
+      tags:
+        - OAuth
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: OAuth authorization code
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: CSRF protection state parameter
+      responses:
+        '302':
+          description: Redirects to dashboard or error page
+          headers:
+            Location:
+              schema:
+                type: string
+                enum:
+                  - /dashboard
+                  - /login?error=oauth_failed
+            Set-Cookie:
+              description: Session cookie on success
+              schema:
+                type: string
+        '400':
+          description: Invalid OAuth response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/callback/github:
+    get:
+      summary: GitHub OAuth callback
+      description: |
+        Handles GitHub OAuth authorization callback.
+        Creates account if new user, links to existing account if email matches.
+      operationId: githubCallback
+      tags:
+        - OAuth
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: OAuth authorization code
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: CSRF protection state parameter
+      responses:
+        '302':
+          description: Redirects to dashboard or error page
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                type: string
+        '400':
+          description: Invalid OAuth response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sb-access-token
+      description: HTTP-only session cookie set by Supabase Auth
+
+  schemas:
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: User's email address
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+          description: |
+            Password must contain:
+            - Minimum 8 characters
+            - At least one uppercase letter
+            - At least one lowercase letter
+            - At least one number
+            - At least one special character
+          example: SecurePass123!
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: User's full name (optional)
+          example: John Doe
+
+    SignupResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        message:
+          type: string
+          example: Account created successfully. Please check your email to verify your account.
+
+    SigninRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 1
+          example: SecurePass123!
+
+    SigninResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          type: object
+          properties:
+            expiresAt:
+              type: string
+              format: date-time
+              description: When the session expires
+              example: '2025-11-09T12:00:00Z'
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    VerifyEmailRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Email verification token from email
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    UpdateProfileRequest:
+      type: object
+      minProperties: 1
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Jane Doe
+        email:
+          type: string
+          format: email
+          example: newemail@example.com
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 123e4567-e89b-12d3-a456-426614174000
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        emailVerified:
+          type: boolean
+          example: true
+        fullName:
+          type: string
+          nullable: true
+          example: John Doe
+        plan:
+          type: string
+          enum: [free, pro, team]
+          example: free
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-11-02T12:00:00Z'
+
+    UserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_CREDENTIALS
+            - EMAIL_EXISTS
+            - EMAIL_NOT_VERIFIED
+            - INVALID_TOKEN
+            - ACCOUNT_LOCKED
+            - IP_BLOCKED
+            - VALIDATION_ERROR
+            - INTERNAL_ERROR
+          example: INVALID_CREDENTIALS
+        message:
+          type: string
+          description: Human-readable error message
+          example: Invalid email or password
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - message
+        - details
+      properties:
+        error:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Validation failed
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: password
+              message:
+                type: string
+                example: Password must contain at least one uppercase letter
+
+    RateLimitError:
+      type: object
+      required:
+        - error
+        - message
+        - retryAfter
+      properties:
+        error:
+          type: string
+          enum:
+            - ACCOUNT_LOCKED
+            - IP_BLOCKED
+            - RATE_LIMIT_EXCEEDED
+          example: ACCOUNT_LOCKED
+        message:
+          type: string
+          example: Too many failed login attempts. Your account is temporarily locked for 15 minutes.
+        retryAfter:
+          type: integer
+          description: Seconds until rate limit resets
+          example: 900

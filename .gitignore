@@ -61,3 +61,7 @@ playwright/.cache/
 *.tmp
 *.swp
 *.bak
+
+# test cookie files
+cookies.txt
+magic_cookies.txt

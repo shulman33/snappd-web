@@ -51,9 +51,10 @@
 - `bandwidth_bytes` (bigint, default: 0)
 - `created_at` (timestamptz, default: now())
 
-**stripe_events** (0 rows, RLS enabled)
-- `id` (text, PK)
+**stripe_events** (0 rows, RLS disabled)
+- `id` (text, PK) - Stripe event ID for idempotency
 - `processed_at` (timestamptz, default: now())
+- Note: RLS disabled by design - system table for webhook idempotency tracking only
 
 ### Storage Buckets
 
@@ -75,6 +76,7 @@
 
 1. `20251020205404_initial_schema` - Initial database schema
 2. `20251020225252_add_profiles_insert_policy` - Added RLS policy for profiles
+3. `disable_rls_on_stripe_events` - Disabled RLS on stripe_events (idempotency table)
 
 ### Edge Functions
 
@@ -83,17 +85,19 @@ No edge functions currently deployed.
 ### Security Advisories
 
 **Active Warnings:**
-1. **stripe_events table**: RLS enabled but no policies exist
-   - Recommendation: Add RLS policies or disable RLS if not needed
-   - [Learn more](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+1. **Function Search Path Mutable**: `public.handle_new_user` function has mutable search_path
+   - Recommendation: Set search_path parameter on function
+   - [Learn more](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable)
 
 2. **Auth - Leaked Password Protection**: Currently disabled
    - Recommendation: Enable HaveIBeenPwned.org integration for enhanced security
    - [Learn more](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
 
-3. **Auth - Insufficient MFA Options**: Too few MFA methods enabled
-   - Recommendation: Enable additional MFA methods
-   - [Learn more](https://supabase.com/docs/guides/auth/auth-mfa)
+**Expected Warnings (Acceptable):**
+1. **RLS Disabled in Public**: `stripe_events` table has RLS disabled
+   - This is intentional - table is for webhook idempotency tracking only
+   - Only accessed via service role, contains no user data
+   - [Learn more](https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public)
 
 ### Performance Advisories
 
@@ -110,3 +114,10 @@ This is a screenshot sharing application with:
 - Screenshot upload and storage with metadata tracking
 - Usage tracking per user/month
 - Public/private screenshot sharing with view counts
+
+## Active Technologies
+- TypeScript 5.x with Next.js 15.5.5 (App Router), React 19.1.0 (005-auth-system)
+- PostgreSQL via Supabase (existing instance: iitxfjhnywekstxagump) (005-auth-system)
+
+## Recent Changes
+- 005-auth-system: Added TypeScript 5.x with Next.js 15.5.5 (App Router), React 19.1.0

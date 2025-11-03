@@ -73,16 +73,16 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 1
 
-- [ ] T025 [P] [US1] Use context7 to fetch @supabase/ssr documentation for server-side authentication patterns
-- [ ] T026 [P] [US1] Use context7 to fetch Supabase Storage createSignedUploadUrl documentation, then implement storage helpers in src/lib/uploads/storage.ts (generateFilePath, createSignedUploadUrl)
-- [ ] T027 [US1] Create POST /api/upload/init route in app/api/upload/init/route.ts with quota checking and signed URL generation
-- [ ] T028 [US1] Use Supabase MCP execute_sql to test quota trigger behavior, then create POST /api/upload/[uploadSessionId]/complete route in app/api/upload/[uploadSessionId]/complete/route.ts
-- [ ] T029 [P] [US1] Use Supabase MCP execute_sql to query monthly_usage table structure, then create quota checking utilities in src/lib/uploads/quota.ts
-- [ ] T030 [US1] Implement short ID generation and screenshot record creation in complete upload route
-- [ ] T031 [US1] Use context7 to fetch Next.js 15 dynamic routes documentation, then create share page in app/[shortId]/page.tsx for viewing public screenshots
-- [ ] T032 [P] [US1] Use Supabase MCP get_project_url to configure public URL for share links
-- [ ] T033 [US1] Add expiration checking logic to share page (30 days for free tier)
-- [ ] T034 [US1] Use Supabase MCP execute_sql to verify screenshot record created, then test complete upload flow: init → upload → complete → view share link
+- [X] T025 [P] [US1] Use context7 to fetch @supabase/ssr documentation for server-side authentication patterns
+- [X] T026 [P] [US1] Use context7 to fetch Supabase Storage createSignedUploadUrl documentation, then implement storage helpers in src/lib/uploads/storage.ts (generateFilePath, createSignedUploadUrl)
+- [X] T027 [US1] Create POST /api/upload/init route in app/api/upload/init/route.ts with quota checking and signed URL generation
+- [X] T028 [US1] Use Supabase MCP execute_sql to test quota trigger behavior, then create POST /api/upload/[uploadSessionId]/complete route in app/api/upload/[uploadSessionId]/complete/route.ts
+- [X] T029 [P] [US1] Use Supabase MCP execute_sql to query monthly_usage table structure, then create quota checking utilities in src/lib/uploads/quota.ts
+- [X] T030 [US1] Implement short ID generation and screenshot record creation in complete upload route
+- [X] T031 [US1] Use context7 to fetch Next.js 15 dynamic routes documentation, then create share page in app/[shortId]/page.tsx for viewing public screenshots
+- [X] T032 [P] [US1] Use Supabase MCP get_project_url to configure public URL for share links
+- [X] T033 [US1] Add expiration checking logic to share page (30 days for free tier)
+- [X] T034 [US1] Use Supabase MCP execute_sql to verify screenshot record created, then test complete upload flow: init → upload → complete → view share link
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - users can upload and share screenshots
 

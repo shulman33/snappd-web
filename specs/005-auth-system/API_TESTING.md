@@ -21,6 +21,9 @@ This document provides curl commands to test all authentication flows for the Sn
 11. [Testing Browser Extension Polling](#11-testing-browser-extension-polling)
 12. [Testing Concurrent Sessions](#12-testing-concurrent-sessions)
 13. [Testing OAuth (Google) Authentication](#13-testing-oauth-google-authentication)
+14. [Testing Magic Link Passwordless Authentication](#14-testing-magic-link-passwordless-authentication)
+15. [Testing Account Deletion](#15-testing-account-deletion-priority-p3---gdprccpa-compliance)
+16. [Testing Screenshot Upload API](#16-testing-screenshot-upload-api)
 
 ---
 
@@ -2724,6 +2727,891 @@ describe('DELETE /api/auth/account', () => {
       });
 
     expect(response.status).toBe(200);
+  });
+});
+```
+
+---
+
+## 16. Testing Screenshot Upload API
+
+### Overview
+
+The screenshot upload API provides a two-phase upload process:
+1. **Initialize upload** (`POST /api/upload/init`) - Validates quota and generates signed upload URL
+2. **Complete upload** (`POST /api/upload/[uploadSessionId]/complete`) - Finalizes upload and creates screenshot record
+
+**Upload Flow**:
+1. Client requests upload initialization with file metadata
+2. Server validates quota and returns signed URL
+3. Client uploads file directly to Supabase Storage using signed URL
+4. Client completes upload with file hash and dimensions
+5. Server creates screenshot record and returns share URL
+
+### Prerequisites
+
+- Active authenticated session (cookies from login)
+- Valid user account with upload quota
+- File meeting requirements:
+  - Size: ≤ 10 MB
+  - Type: PNG, JPEG, WEBP, or GIF
+
+### Test Initialize Upload - Success
+
+**Scenario**: User with available quota initializes upload
+
+```bash
+# Step 1: Login to get session cookies
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "SecurePass123!"
+  }' \
+  -c upload_cookies.txt
+
+# Step 2: Initialize upload
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }' \
+  -v
+```
+
+**Expected Response (200)**:
+```json
+{
+  "uploadSessionId": "uuid-here",
+  "signedUrl": "https://iitxfjhnywekstxagump.supabase.co/storage/v1/object/upload/...",
+  "token": "signed-token-here",
+  "storagePath": "user-id/2025/11/temp-1234567890.png",
+  "expiresAt": "2025-11-03T13:00:00.000Z",
+  "quota": {
+    "plan": "free",
+    "limit": 10,
+    "used": 5,
+    "remaining": 5
+  }
+}
+```
+
+**Expected Behavior**:
+- ✅ Quota checked and remaining quota returned
+- ✅ Signed upload URL generated (valid for 1 hour)
+- ✅ Upload session created in `upload_sessions` table
+- ✅ Session status: `pending`
+
+### Test Initialize Upload - Quota Exceeded
+
+**Scenario**: Free user has reached monthly upload limit
+
+```bash
+# Assuming user has already uploaded 10 screenshots this month
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }' \
+  -v
+```
+
+**Expected Response (403)**:
+```json
+{
+  "error": "Monthly upload quota exceeded",
+  "quota": {
+    "plan": "free",
+    "limit": 10,
+    "used": 10,
+    "remaining": 0
+  },
+  "upgrade": {
+    "message": "Upgrade to Pro for unlimited uploads",
+    "url": "/pricing"
+  }
+}
+```
+
+### Test Initialize Upload - Validation Errors
+
+#### File Too Large
+
+```bash
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "large-screenshot.png",
+    "fileSize": 15728640,
+    "mimeType": "image/png"
+  }' \
+  -v
+```
+
+**Expected Response (413)**:
+```json
+{
+  "error": "File size exceeds maximum allowed size of 10MB",
+  "maxSize": 10485760
+}
+```
+
+#### Invalid MIME Type
+
+```bash
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "document.pdf",
+    "fileSize": 524288,
+    "mimeType": "application/pdf"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "Invalid file type. Allowed types: PNG, JPEG, WEBP, GIF",
+  "allowedTypes": [
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif"
+  ]
+}
+```
+
+#### Missing Required Fields
+
+```bash
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "screenshot.png"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "Missing required fields: filename, fileSize, mimeType"
+}
+```
+
+### Test Initialize Upload - Unauthenticated
+
+```bash
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filename": "screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }' \
+  -v
+```
+
+**Expected Response (401)**:
+```json
+{
+  "error": "Unauthorized. Please sign in to upload screenshots."
+}
+```
+
+### Test Complete Upload - Success
+
+**Scenario**: User completes upload after file is in storage
+
+```bash
+# Step 1: Initialize upload (save uploadSessionId from response)
+UPLOAD_SESSION_ID=$(curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }' | jq -r '.uploadSessionId')
+
+# Step 2: Upload file to signed URL (simulated - in real flow, client does this)
+# curl -X PUT "<signedUrl>" --upload-file screenshot.png
+
+# Step 3: Complete upload
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' \
+  -v
+```
+
+**Expected Response (201)**:
+```json
+{
+  "message": "Upload completed successfully",
+  "screenshot": {
+    "id": "uuid-here",
+    "shortId": "aBcD123",
+    "shareUrl": "http://localhost:3000/aBcD123",
+    "storagePath": "user-id/2025/11/a1b2c3d4e5f6-1234567890.png",
+    "expiresAt": "2025-12-03T12:00:00.000Z",
+    "sharingMode": "public",
+    "width": 1920,
+    "height": 1080,
+    "fileSize": 524288,
+    "createdAt": "2025-11-03T12:00:00.000Z"
+  }
+}
+```
+
+**Expected Behavior**:
+- ✅ Screenshot record created in `screenshots` table
+- ✅ Upload session status updated to `completed`
+- ✅ Short ID generated for sharing
+- ✅ Monthly usage incremented
+- ✅ Expiration date set (30 days for free users, none for pro users)
+
+### Test Complete Upload - Duplicate File
+
+**Scenario**: User uploads same file twice (same hash)
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "existing-hash-123",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' \
+  -v
+```
+
+**Expected Response (200)**:
+```json
+{
+  "message": "File already exists",
+  "screenshot": {
+    "id": "existing-uuid",
+    "shortId": "aBcD123",
+    "shareUrl": "http://localhost:3000/aBcD123"
+  },
+  "duplicate": true
+}
+```
+
+**Expected Behavior**:
+- No new screenshot record created
+- Returns existing screenshot details
+- No quota consumed
+
+### Test Complete Upload - With Password Protection
+
+**Scenario**: User uploads screenshot with password protection
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "password",
+    "password": "SecureScreenshot123!"
+  }' \
+  -v
+```
+
+**Expected Response (201)**:
+```json
+{
+  "message": "Upload completed successfully",
+  "screenshot": {
+    "id": "uuid-here",
+    "shortId": "aBcD123",
+    "shareUrl": "http://localhost:3000/aBcD123",
+    "storagePath": "user-id/2025/11/a1b2c3d4e5f6-1234567890.png",
+    "expiresAt": null,
+    "sharingMode": "password",
+    "width": 1920,
+    "height": 1080,
+    "fileSize": 524288,
+    "createdAt": "2025-11-03T12:00:00.000Z"
+  }
+}
+```
+
+**Expected Behavior**:
+- Password hashed with bcrypt (10 rounds)
+- `is_public` set to `false`
+- Password required to view screenshot
+
+### Test Complete Upload - With Custom Expiration
+
+**Scenario**: User uploads screenshot with custom expiration time
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public",
+    "expiresIn": 86400
+  }' \
+  -v
+```
+
+**Expected Response (201)**:
+```json
+{
+  "message": "Upload completed successfully",
+  "screenshot": {
+    "id": "uuid-here",
+    "shortId": "aBcD123",
+    "shareUrl": "http://localhost:3000/aBcD123",
+    "storagePath": "user-id/2025/11/a1b2c3d4e5f6-1234567890.png",
+    "expiresAt": "2025-11-04T12:00:00.000Z",
+    "sharingMode": "public",
+    "width": 1920,
+    "height": 1080,
+    "fileSize": 524288,
+    "createdAt": "2025-11-03T12:00:00.000Z"
+  }
+}
+```
+
+**Note**: `expiresIn` is in seconds. Example: 86400 = 24 hours.
+
+### Test Complete Upload - Validation Errors
+
+#### Missing Required Fields
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "Missing required fields: fileHash, width, height"
+}
+```
+
+#### Password Required for Password Mode
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "password"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "Password required for password-protected sharing mode"
+}
+```
+
+#### Invalid Upload Session ID
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/invalid-uuid/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' \
+  -v
+```
+
+**Expected Response (404)**:
+```json
+{
+  "error": "Upload session not found or expired"
+}
+```
+
+#### Session Already Completed
+
+```bash
+# Try to complete the same session twice
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "Upload session already completed"
+}
+```
+
+### Test Complete Upload - Quota Enforcement
+
+**Scenario**: User exceeds quota during completion
+
+```bash
+# User at quota limit tries to complete upload
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' \
+  -v
+```
+
+**Expected Response (403)**:
+```json
+{
+  "error": "Monthly upload quota exceeded",
+  "upgrade": {
+    "message": "Upgrade to Pro for unlimited uploads",
+    "url": "/pricing"
+  }
+}
+```
+
+**Note**: This can happen if user initiates multiple uploads simultaneously and quota is checked at init time.
+
+### Test Complete Upload Flow
+
+**Complete End-to-End Upload Script**:
+
+```bash
+#!/bin/bash
+
+EMAIL="uploader@example.com"
+PASSWORD="SecurePass123!"
+
+echo "=== Screenshot Upload Flow Test ==="
+echo ""
+
+# Step 1: Login
+echo "=== Step 1: Login ==="
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"email\": \"$EMAIL\",
+    \"password\": \"$PASSWORD\"
+  }" \
+  -c upload_test_cookies.txt | jq
+
+# Step 2: Initialize upload
+echo -e "\n=== Step 2: Initialize Upload ==="
+INIT_RESPONSE=$(curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_test_cookies.txt \
+  -d '{
+    "filename": "test-screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }')
+
+echo "$INIT_RESPONSE" | jq
+
+UPLOAD_SESSION_ID=$(echo "$INIT_RESPONSE" | jq -r '.uploadSessionId')
+SIGNED_URL=$(echo "$INIT_RESPONSE" | jq -r '.signedUrl')
+
+echo "Upload Session ID: $UPLOAD_SESSION_ID"
+
+# Step 3: Upload file (simulated)
+echo -e "\n=== Step 3: Upload File to Storage ==="
+echo "In real flow, client would upload file to signed URL:"
+echo "curl -X PUT \"$SIGNED_URL\" --upload-file test-screenshot.png"
+echo "Simulating upload completion..."
+
+# Step 4: Complete upload
+echo -e "\n=== Step 4: Complete Upload ==="
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_test_cookies.txt \
+  -d '{
+    "fileHash": "test-hash-123abc",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' | jq
+
+# Step 5: Verify quota updated
+echo -e "\n=== Step 5: Verify Quota Updated ==="
+curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_test_cookies.txt \
+  -d '{
+    "filename": "another-screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }' | jq '.quota'
+
+# Cleanup
+rm -f upload_test_cookies.txt
+
+echo -e "\n=== Test Complete ==="
+```
+
+**Save as `test_upload_flow.sh` and run**: `bash test_upload_flow.sh`
+
+### Verify Upload in Database
+
+After successful upload, verify data in database:
+
+```sql
+-- Check screenshot record created
+SELECT
+  id,
+  short_id,
+  storage_path,
+  file_size,
+  width,
+  height,
+  sharing_mode,
+  is_public,
+  expires_at,
+  created_at
+FROM screenshots
+WHERE user_id = 'user-uuid-here'
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- Check upload session completed
+SELECT
+  id,
+  filename,
+  upload_status,
+  screenshot_id,
+  created_at
+FROM upload_sessions
+WHERE user_id = 'user-uuid-here'
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- Verify monthly usage incremented
+SELECT
+  month,
+  screenshot_count,
+  storage_bytes
+FROM monthly_usage
+WHERE user_id = 'user-uuid-here'
+  AND month = to_char(now(), 'YYYY-MM');
+```
+
+### Test Sharing Modes
+
+#### Public Sharing (Default)
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }'
+```
+
+**Expected**: `is_public = true`, no password required, accessible via share URL
+
+#### Private Sharing
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "private"
+  }'
+```
+
+**Expected**: `is_public = false`, only accessible to owner (authenticated)
+
+#### Password-Protected Sharing
+
+```bash
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "password",
+    "password": "ViewerPassword123!"
+  }'
+```
+
+**Expected**: `is_public = false`, password required to view, `password_hash` stored
+
+### Test Pro User Features
+
+**Scenario**: Pro user uploads without expiration
+
+```bash
+# Upgrade user to Pro (manual or via Stripe webhook)
+# Then upload:
+curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b pro_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }'
+```
+
+**Expected**:
+- `expiresAt` is `null` (no expiration)
+- Unlimited quota (no quota errors)
+
+### Performance Testing
+
+#### Test Upload Initialization Speed
+
+```bash
+time curl -X POST http://localhost:3000/api/upload/init \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "filename": "screenshot.png",
+    "fileSize": 524288,
+    "mimeType": "image/png"
+  }' \
+  -s -o /dev/null -w "HTTP %{http_code}, Time: %{time_total}s\n"
+```
+
+**Expected**: < 500ms for initialization
+
+#### Test Upload Completion Speed
+
+```bash
+time curl -X POST "http://localhost:3000/api/upload/$UPLOAD_SESSION_ID/complete" \
+  -H "Content-Type: application/json" \
+  -b upload_cookies.txt \
+  -d '{
+    "fileHash": "a1b2c3d4e5f6",
+    "width": 1920,
+    "height": 1080,
+    "sharingMode": "public"
+  }' \
+  -s -o /dev/null -w "HTTP %{http_code}, Time: %{time_total}s\n"
+```
+
+**Expected**: < 1 second for completion
+
+### Security Considerations
+
+🔒 **Upload API Security**:
+- Requires authentication for all endpoints
+- Quota enforcement prevents abuse
+- Signed URLs expire after 1 hour
+- File size and type validation
+- Password hashing with bcrypt (10 rounds)
+- Duplicate file detection (deduplication)
+- Upload sessions expire after 1 hour
+- RLS policies protect user data
+
+### Troubleshooting Upload Issues
+
+#### "Quota exceeded"
+- **Cause**: User reached monthly upload limit
+- **Solution**: Upgrade to Pro plan or wait for next month
+- **Debug**: Check `monthly_usage` table for current usage
+
+#### "Upload session not found"
+- **Cause**: Invalid session ID or expired session
+- **Solution**: Start new upload flow from initialization
+- **Debug**: Check `upload_sessions` table for session status
+
+#### "Signed URL expired"
+- **Cause**: More than 1 hour passed since initialization
+- **Solution**: Request new signed URL via re-initialization
+- **Prevention**: Complete uploads within 1 hour
+
+#### "File already exists"
+- **Cause**: File with same hash already uploaded
+- **Solution**: Use existing screenshot URL (returned in response)
+- **Note**: This is expected behavior for deduplication
+
+#### "Password required"
+- **Cause**: Selected password-protected mode without providing password
+- **Solution**: Include `password` field in completion request
+
+### Automated Testing (Unit Tests)
+
+**Example Jest/Vitest test**:
+
+```typescript
+describe('POST /api/upload/init', () => {
+  it('should initialize upload for authenticated user', async () => {
+    const session = await loginTestUser();
+
+    const response = await request(app)
+      .post('/api/upload/init')
+      .set('Cookie', session.cookies)
+      .send({
+        filename: 'test.png',
+        fileSize: 524288,
+        mimeType: 'image/png'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.uploadSessionId).toBeDefined();
+    expect(response.body.signedUrl).toBeDefined();
+    expect(response.body.quota).toMatchObject({
+      plan: 'free',
+      limit: 10,
+      remaining: expect.any(Number)
+    });
+  });
+
+  it('should reject upload when quota exceeded', async () => {
+    const user = await createTestUserWithFullQuota();
+    const session = await loginTestUser(user);
+
+    const response = await request(app)
+      .post('/api/upload/init')
+      .set('Cookie', session.cookies)
+      .send({
+        filename: 'test.png',
+        fileSize: 524288,
+        mimeType: 'image/png'
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('Monthly upload quota exceeded');
+  });
+
+  it('should reject file exceeding size limit', async () => {
+    const session = await loginTestUser();
+
+    const response = await request(app)
+      .post('/api/upload/init')
+      .set('Cookie', session.cookies)
+      .send({
+        filename: 'large.png',
+        fileSize: 15728640, // 15 MB
+        mimeType: 'image/png'
+      });
+
+    expect(response.status).toBe(413);
+    expect(response.body.error).toContain('exceeds maximum');
+  });
+});
+
+describe('POST /api/upload/[uploadSessionId]/complete', () => {
+  it('should complete upload and create screenshot', async () => {
+    const session = await loginTestUser();
+    const uploadSession = await createUploadSession(session.user.id);
+
+    const response = await request(app)
+      .post(`/api/upload/${uploadSession.id}/complete`)
+      .set('Cookie', session.cookies)
+      .send({
+        fileHash: 'test-hash-123',
+        width: 1920,
+        height: 1080,
+        sharingMode: 'public'
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.screenshot.shortId).toBeDefined();
+    expect(response.body.screenshot.shareUrl).toContain('http://');
+  });
+
+  it('should return existing screenshot for duplicate file', async () => {
+    const session = await loginTestUser();
+    const existingScreenshot = await createScreenshot(session.user.id, {
+      fileHash: 'duplicate-hash'
+    });
+
+    const uploadSession = await createUploadSession(session.user.id);
+
+    const response = await request(app)
+      .post(`/api/upload/${uploadSession.id}/complete`)
+      .set('Cookie', session.cookies)
+      .send({
+        fileHash: 'duplicate-hash',
+        width: 1920,
+        height: 1080,
+        sharingMode: 'public'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.duplicate).toBe(true);
+    expect(response.body.screenshot.id).toBe(existingScreenshot.id);
+  });
+
+  it('should enforce password requirement for password mode', async () => {
+    const session = await loginTestUser();
+    const uploadSession = await createUploadSession(session.user.id);
+
+    const response = await request(app)
+      .post(`/api/upload/${uploadSession.id}/complete`)
+      .set('Cookie', session.cookies)
+      .send({
+        fileHash: 'test-hash-123',
+        width: 1920,
+        height: 1080,
+        sharingMode: 'password'
+        // Missing password field
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('Password required');
   });
 });
 ```

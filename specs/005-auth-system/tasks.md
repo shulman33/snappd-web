@@ -260,24 +260,24 @@
 
 ### Implementation for User Story 8
 
-- [ ] T108 [P] [US8] **USE SUPABASE MCP**: Review Supabase docs for user deletion using `mcp__supabase__search_docs` with GraphQL query for "admin deleteUser account removal"
-- [ ] T108a [P] [US8] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "admin deleteUser and account deletion"
-- [ ] T109 [US8] Implement DELETE /api/auth/account route handler in `src/app/api/auth/account/route.ts` with password verification requirement per FR-053
-- [ ] T110 [US8] Add password confirmation check in account DELETE route before allowing deletion
-- [ ] T111 [US8] Add OAuth re-authentication check in account DELETE route for OAuth-only users
-- [ ] T112 [P] [US8] **USE CONTEXT7**: Fetch Stripe subscription documentation using `mcp__context7__get-library-docs` for "/stripe/stripe-node" focused on "subscription cancellation"
-- [ ] T112a [US8] **USE STRIPE INTEGRATION**: Cancel active Stripe subscription in account DELETE route using Stripe API before account deletion per FR-055
-- [ ] T113 [US8] Mark Stripe customer record as deleted in account DELETE route updating stripe metadata
-- [ ] T114 [P] [US8] **USE CONTEXT7**: Fetch @supabase/storage-js documentation using `mcp__context7__get-library-docs` for "/supabase/storage-js" focused on "file deletion and bucket operations"
-- [ ] T114a [US8] Delete all user screenshots from storage bucket in account DELETE route using Supabase Storage API per FR-054
-- [ ] T115 [US8] Delete profile record from profiles table in account DELETE route (cascades from auth.users deletion)
-- [ ] T116 [US8] Delete monthly_usage records in account DELETE route
-- [ ] T117 [US8] Delete authentication events in account DELETE route (user_id will be SET NULL due to ON DELETE SET NULL)
-- [ ] T118 [US8] Delete user from auth.users using supabase.auth.admin.deleteUser() in account DELETE route
-- [ ] T119 [US8] Send confirmation email after successful account deletion per FR-056
-- [ ] T120 [US8] Add auth event logging for account_deleted events with deletion_reason metadata
-- [ ] T121 [US8] Verify email address becomes available for re-registration after deletion per FR-057
-- [ ] T122 [US8] **USE SUPABASE MCP**: Test complete data deletion using `mcp__supabase__execute_sql` to verify no orphaned records remain
+- [X] T108 [P] [US8] **USE SUPABASE MCP**: Review Supabase docs for user deletion using `mcp__supabase__search_docs` with GraphQL query for "admin deleteUser account removal"
+- [X] T108a [P] [US8] **USE CONTEXT7**: Fetch @supabase/supabase-js documentation using `mcp__context7__get-library-docs` for "/supabase/supabase-js" focused on "admin deleteUser and account deletion"
+- [X] T109 [US8] Implement DELETE /api/auth/account route handler in `src/app/api/auth/account/route.ts` with password verification requirement per FR-053
+- [X] T110 [US8] Add password confirmation check in account DELETE route before allowing deletion
+- [X] T111 [US8] Add OAuth re-authentication check in account DELETE route for OAuth-only users
+- [X] T112 [P] [US8] **USE CONTEXT7**: Fetch Stripe subscription documentation using `mcp__context7__get-library-docs` for "/stripe/stripe-node" focused on "subscription cancellation"
+- [X] T112a [US8] **USE STRIPE INTEGRATION**: Cancel active Stripe subscription in account DELETE route using Stripe API before account deletion per FR-055
+- [X] T113 [US8] Mark Stripe customer record as deleted in account DELETE route updating stripe metadata
+- [X] T114 [P] [US8] **USE CONTEXT7**: Fetch @supabase/storage-js documentation using `mcp__context7__get-library-docs` for "/supabase/storage-js" focused on "file deletion and bucket operations"
+- [X] T114a [US8] Delete all user screenshots from storage bucket in account DELETE route using Supabase Storage API per FR-054
+- [X] T115 [US8] Delete profile record from profiles table in account DELETE route (cascades from auth.users deletion)
+- [X] T116 [US8] Delete monthly_usage records in account DELETE route
+- [X] T117 [US8] Delete authentication events in account DELETE route (user_id will be SET NULL due to ON DELETE SET NULL)
+- [X] T118 [US8] Delete user from auth.users using supabase.auth.admin.deleteUser() in account DELETE route
+- [X] T119 [US8] Send confirmation email after successful account deletion per FR-056
+- [X] T120 [US8] Add auth event logging for account_deleted events with deletion_reason metadata
+- [X] T121 [US8] Verify email address becomes available for re-registration after deletion per FR-057
+- [X] T122 [US8] **USE SUPABASE MCP**: Test complete data deletion using `mcp__supabase__execute_sql` to verify no orphaned records remain
 
 **Checkpoint**: All user stories complete - full authentication system functional
 
@@ -314,7 +314,7 @@
 - [ ] T134a [P] Generate OpenAPI documentation from contracts/openapi.yaml using Redoc or Swagger UI
 - [ ] T135 [P] Add JSDoc comments to all API route handlers documenting parameters, returns, and errors
 - [ ] T136 [P] Create Postman collection from OpenAPI spec for API testing
-- [ ] T137 Validate quickstart.md instructions work end-to-end on clean environment
+- [x] T137 Validate quickstart.md instructions work end-to-end on clean environment
 - [ ] T138 Update CLAUDE.md with authentication system architecture notes
 
 ### Performance Optimization
@@ -322,9 +322,9 @@
 - [ ] T139 [P] **USE CONTEXT7**: Fetch PostgreSQL indexing documentation using `mcp__context7__get-library-docs` for "/postgres/postgres" focused on "B-tree indexes and query optimization"
 - [ ] T139a [P] Add database indexes for frequent queries (auth_events by email+timestamp, profiles by email)
 - [ ] T140 [P] Implement caching for rate limit checks using Upstash Redis in-memory caching
-- [ ] T141 Test API route response times meet <200ms target (95th percentile)
-- [ ] T142 Test session validation meets <100ms target
-- [ ] T143 Load test authentication endpoints for 1000 concurrent users
+- [x] T141 Test API route response times meet <200ms target (95th percentile)
+- [x] T142 Test session validation meets <100ms target
+- [x] T143 Load test authentication endpoints for 1000 concurrent users
 
 ### Edge Cases & Error Scenarios
 

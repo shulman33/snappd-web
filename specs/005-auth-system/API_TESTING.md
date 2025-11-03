@@ -2006,6 +2006,730 @@ describe('POST /api/auth/magic-link', () => {
 
 ---
 
+## 15. Testing Account Deletion (Priority: P3 - GDPR/CCPA Compliance)
+
+### Overview
+
+Account deletion permanently removes all user data from the system for privacy compliance. This is an irreversible operation that requires multiple verification steps.
+
+**Account Deletion Flow**:
+1. User initiates deletion request
+2. System verifies user session
+3. Password verification (email/password users) OR OAuth re-authentication (OAuth-only users)
+4. User confirms with phrase "DELETE MY ACCOUNT"
+5. System cancels active Stripe subscriptions
+6. System deletes all user data (screenshots, profile, usage records)
+7. System deletes auth account
+8. Confirmation email sent
+9. User signed out
+
+### Prerequisites
+
+- Active authenticated session (cookies from login)
+- Valid password (for email/password accounts)
+- No pending Stripe payments (optional, but recommended)
+
+### Test Account Deletion - Email/Password User
+
+**Scenario**: User with email/password account deletes their account
+
+```bash
+# Step 1: Login to get session cookies
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "deleteme@example.com",
+    "password": "SecurePass123!"
+  }' \
+  -c deletion_cookies.txt
+
+# Step 2: Request account deletion
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b deletion_cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' \
+  -v
+```
+
+**Expected Response (200)**:
+```json
+{
+  "message": "Account successfully deleted. You will receive a confirmation email shortly."
+}
+```
+
+**Expected Behavior**:
+- ✅ Active Stripe subscription cancelled (if exists)
+- ✅ Stripe customer marked as deleted with metadata
+- ✅ All screenshots deleted from storage bucket
+- ✅ Profile record deleted from `profiles` table
+- ✅ Monthly usage records deleted
+- ✅ Auth events anonymized (user_id → NULL)
+- ✅ User deleted from `auth.users` table
+- ✅ Auth events logged: `account_deleted`
+- ✅ Confirmation email sent (TODO: implement)
+- ✅ Session invalidated (user signed out)
+- ✅ Email becomes available for re-registration
+
+**Verify Deletion**:
+```bash
+# Try to access user endpoint (should fail)
+curl -X GET http://localhost:3000/api/auth/user \
+  -b deletion_cookies.txt
+
+# Expected: 401 Unauthorized
+
+# Try to login with deleted account credentials (should fail)
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "deleteme@example.com",
+    "password": "SecurePass123!"
+  }'
+
+# Expected: 401 Invalid credentials
+
+# Cleanup
+rm -f deletion_cookies.txt
+```
+
+### Test Account Deletion - OAuth-Only User
+
+**Scenario**: User who signed up with Google OAuth deletes their account
+
+```bash
+# Step 1: Login via OAuth (manual browser test)
+# Navigate to: http://localhost:3000/login
+# Click "Sign in with Google"
+# Save cookies to oauth_deletion_cookies.txt
+
+# Step 2: Request account deletion (OAuth users still need password field)
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b oauth_deletion_cookies.txt \
+  -d '{
+    "password": "unused-for-oauth",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' \
+  -v
+```
+
+**Expected Response (200)**:
+```json
+{
+  "message": "Account successfully deleted. You will receive a confirmation email shortly."
+}
+```
+
+**Expected Behavior**:
+- OAuth identity removed from `auth.identities` table
+- All other data deleted (same as email/password user)
+
+### Test Account Deletion - Validation Errors
+
+#### Missing Confirmation Phrase
+
+```bash
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "delete my account"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Invalid input",
+  "details": [
+    {
+      "field": "confirmation",
+      "message": "You must type \"DELETE MY ACCOUNT\" to confirm"
+    }
+  ]
+}
+```
+
+#### Wrong Confirmation Phrase
+
+```bash
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "I want to delete"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Invalid input",
+  "details": [
+    {
+      "field": "confirmation",
+      "message": "You must type \"DELETE MY ACCOUNT\" to confirm"
+    }
+  ]
+}
+```
+
+#### Missing Password
+
+```bash
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "confirmation": "DELETE MY ACCOUNT"
+  }' \
+  -v
+```
+
+**Expected Response (400)**:
+```json
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Invalid input",
+  "details": [
+    {
+      "field": "password",
+      "message": "Password is required for account deletion"
+    }
+  ]
+}
+```
+
+#### Invalid Password
+
+```bash
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "password": "WrongPassword123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' \
+  -v
+```
+
+**Expected Response (403)**:
+```json
+{
+  "error": "INVALID_PASSWORD",
+  "message": "Invalid password. Please try again."
+}
+```
+
+**Expected Behavior**:
+- Failed deletion attempt logged to `auth_events`
+- Account NOT deleted
+- User remains logged in
+
+### Test Account Deletion - Unauthorized Access
+
+#### Not Logged In
+
+```bash
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' \
+  -v
+```
+
+**Expected Response (401)**:
+```json
+{
+  "error": "UNAUTHORIZED",
+  "message": "You must be logged in to delete your account"
+}
+```
+
+### Test Complete Account Deletion Flow
+
+**End-to-End Test Script**:
+
+```bash
+#!/bin/bash
+
+TEST_EMAIL="deletion-test@example.com"
+TEST_PASSWORD="TestDelete123!"
+
+echo "=== Complete Account Deletion Flow Test ==="
+echo ""
+
+# Step 1: Create a test account
+echo "=== Step 1: Create Test Account ==="
+curl -X POST http://localhost:3000/api/auth/signup \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"email\": \"$TEST_EMAIL\",
+    \"password\": \"$TEST_PASSWORD\",
+    \"fullName\": \"Deletion Test User\"
+  }" | jq
+
+# Step 2: Verify email (manual or use token from logs)
+echo -e "\n=== Step 2: Verify Email ==="
+echo "Manual step: Click verification link in email"
+echo "Or use: curl -X GET 'http://localhost:3000/api/auth/verify-email?token_hash={token}&type=signup'"
+
+read -p "Press enter after email is verified..."
+
+# Step 3: Login
+echo -e "\n=== Step 3: Login ==="
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"email\": \"$TEST_EMAIL\",
+    \"password\": \"$TEST_PASSWORD\"
+  }" \
+  -c deletion_test_cookies.txt | jq
+
+# Step 4: Verify account exists
+echo -e "\n=== Step 4: Verify Account Exists ==="
+curl -X GET http://localhost:3000/api/auth/user \
+  -b deletion_test_cookies.txt | jq
+
+# Step 5: Attempt deletion with wrong password (should fail)
+echo -e "\n=== Step 5: Test Wrong Password (Should Fail) ==="
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b deletion_test_cookies.txt \
+  -d '{
+    "password": "WrongPassword123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' | jq
+
+# Step 6: Attempt deletion with wrong confirmation (should fail)
+echo -e "\n=== Step 6: Test Wrong Confirmation (Should Fail) ==="
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b deletion_test_cookies.txt \
+  -d "{
+    \"password\": \"$TEST_PASSWORD\",
+    \"confirmation\": \"delete my account\"
+  }" | jq
+
+# Step 7: Delete account successfully
+echo -e "\n=== Step 7: Delete Account Successfully ==="
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b deletion_test_cookies.txt \
+  -d "{
+    \"password\": \"$TEST_PASSWORD\",
+    \"confirmation\": \"DELETE MY ACCOUNT\"
+  }" | jq
+
+# Step 8: Verify account deleted (should get 401)
+echo -e "\n=== Step 8: Verify Account Deleted ==="
+curl -X GET http://localhost:3000/api/auth/user \
+  -b deletion_test_cookies.txt | jq
+
+# Step 9: Verify cannot login with deleted credentials
+echo -e "\n=== Step 9: Verify Cannot Login ==="
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"email\": \"$TEST_EMAIL\",
+    \"password\": \"$TEST_PASSWORD\"
+  }" | jq
+
+# Step 10: Verify email is available for re-registration
+echo -e "\n=== Step 10: Verify Email Available for Re-registration ==="
+curl -X POST http://localhost:3000/api/auth/signup \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"email\": \"$TEST_EMAIL\",
+    \"password\": \"$TEST_PASSWORD\",
+    \"fullName\": \"Re-registered User\"
+  }" | jq
+
+# Cleanup
+rm -f deletion_test_cookies.txt
+
+echo -e "\n=== Test Complete ==="
+```
+
+**Save as `test_account_deletion.sh` and run**: `bash test_account_deletion.sh`
+
+### Verify Data Deletion in Database
+
+After deleting an account, verify all data is removed:
+
+```sql
+-- Check user removed from auth.users
+SELECT * FROM auth.users WHERE email = 'deleteme@example.com';
+-- Expected: 0 rows
+
+-- Check profile removed
+SELECT * FROM profiles WHERE email = 'deleteme@example.com';
+-- Expected: 0 rows
+
+-- Check screenshots removed
+SELECT * FROM screenshots WHERE user_id = '{deleted_user_id}';
+-- Expected: 0 rows
+
+-- Check monthly_usage removed
+SELECT * FROM monthly_usage WHERE user_id = '{deleted_user_id}';
+-- Expected: 0 rows
+
+-- Check auth_events anonymized (user_id should be NULL)
+SELECT * FROM auth_events
+WHERE email = 'deleteme@example.com'
+  AND event_type = 'account_deleted';
+-- Expected: user_id = NULL, event exists for audit trail
+
+-- Check OAuth identities removed
+SELECT * FROM auth.identities WHERE user_id = '{deleted_user_id}';
+-- Expected: 0 rows
+```
+
+### Test Stripe Integration
+
+**Scenario**: User with active subscription deletes account
+
+```bash
+# Prerequisites: User must have active Stripe subscription
+# Test account: premium@example.com with Pro plan
+
+# Step 1: Login
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "premium@example.com",
+    "password": "SecurePass123!"
+  }' \
+  -c premium_cookies.txt
+
+# Step 2: Verify subscription exists (check Stripe dashboard)
+
+# Step 3: Delete account
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b premium_cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' | jq
+
+# Step 4: Verify in Stripe dashboard:
+# - Subscription cancelled
+# - Customer metadata includes: deleted_at, deleted_by='user', reason='account_deletion'
+# - Customer NOT deleted (kept for audit trail)
+
+# Cleanup
+rm -f premium_cookies.txt
+```
+
+**Expected Stripe Behavior**:
+- Subscription status: `cancelled`
+- Prorated refund issued (if applicable)
+- Customer record preserved with deletion metadata
+- No new charges will occur
+
+### Test Storage Cleanup
+
+**Scenario**: User with uploaded screenshots deletes account
+
+```bash
+# Prerequisites: User must have screenshots in storage
+
+# Before deletion: Note screenshot count
+echo "=== Screenshots Before Deletion ==="
+# Use Supabase dashboard or SQL to check screenshot count
+
+# Delete account
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' | jq
+
+# After deletion: Verify screenshots removed from storage bucket
+echo "=== Verify Screenshots Deleted ==="
+# Check Supabase Storage dashboard - files should be gone
+```
+
+**Verify in Supabase Dashboard**:
+1. Navigate to Storage → screenshots bucket
+2. Search for user's files by storage_path
+3. Confirm files no longer exist
+
+### Test Concurrent Deletion Attempts
+
+**Scenario**: Prevent race conditions with concurrent deletion requests
+
+```bash
+# Login
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "concurrent@example.com",
+    "password": "SecurePass123!"
+  }' \
+  -c concurrent_cookies.txt
+
+# Send two deletion requests simultaneously
+echo "=== Concurrent Deletion Attempt 1 ===" &
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b concurrent_cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' | jq &
+
+echo "=== Concurrent Deletion Attempt 2 ===" &
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b concurrent_cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' | jq &
+
+wait
+
+# Cleanup
+rm -f concurrent_cookies.txt
+```
+
+**Expected Behavior**:
+- First request: Success (200)
+- Second request: Unauthorized (401) or success (idempotent)
+- No duplicate deletions
+- No orphaned records
+
+### Test Error Recovery
+
+#### Stripe API Failure
+
+**Manual Test**: Temporarily break Stripe API key
+
+```bash
+# Set invalid Stripe key in .env.local
+STRIPE_SECRET_KEY=invalid_key
+
+# Attempt deletion
+curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' | jq
+```
+
+**Expected Behavior**:
+- Deletion continues despite Stripe failure
+- Error logged to console
+- Account still deleted
+- Manual Stripe cleanup may be needed
+
+#### Storage API Failure
+
+**Expected Behavior**:
+- Files may be orphaned in storage
+- Account deletion completes
+- Manual cleanup required for orphaned files
+
+### Performance Testing
+
+#### Test Deletion Speed
+
+```bash
+# Measure deletion time
+time curl -X DELETE http://localhost:3000/api/auth/account \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "password": "SecurePass123!",
+    "confirmation": "DELETE MY ACCOUNT"
+  }' \
+  -s -o /dev/null -w "HTTP %{http_code}, Time: %{time_total}s\n"
+```
+
+**Expected**: < 5 seconds for complete deletion (including Stripe, storage, database)
+
+### Security Considerations
+
+🔒 **Account Deletion Security**:
+- Requires active authenticated session
+- Password re-verification (email/password users)
+- OAuth re-authentication check (OAuth-only users)
+- Explicit confirmation phrase required
+- Irreversible operation (no undo)
+- Comprehensive audit logging
+- Email confirmation sent after deletion
+
+### Troubleshooting Account Deletion
+
+#### "Unauthorized"
+- **Cause**: Not logged in or session expired
+- **Solution**: Login again and retry deletion
+
+#### "Invalid password"
+- **Cause**: Wrong password provided
+- **Solution**: Verify password is correct
+- **Note**: Failed attempts are logged for security
+
+#### "Deletion failed"
+- **Cause**: Critical database operation failed
+- **Solution**: Contact support
+- **Debug**: Check server logs for specific error
+
+#### "Stripe cancellation failed"
+- **Cause**: Stripe API error or invalid subscription
+- **Solution**: Deletion continues, manually cancel in Stripe dashboard
+- **Prevention**: Ensure Stripe keys are valid
+
+#### Email still in use
+- **Cause**: Deletion may be in progress or failed partway
+- **Solution**: Wait 5 minutes and try re-registration
+- **Debug**: Check database for orphaned records
+
+### Automated Testing (Unit Tests)
+
+**Example Jest/Vitest test**:
+
+```typescript
+describe('DELETE /api/auth/account', () => {
+  it('should delete account with valid password and confirmation', async () => {
+    // Setup: Create user and login
+    const user = await createTestUser();
+    const session = await loginTestUser(user);
+
+    const response = await request(app)
+      .delete('/api/auth/account')
+      .set('Cookie', session.cookies)
+      .send({
+        password: 'SecurePass123!',
+        confirmation: 'DELETE MY ACCOUNT'
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toContain('successfully deleted');
+
+    // Verify user no longer exists
+    const { data } = await supabase.auth.admin.getUserById(user.id);
+    expect(data.user).toBeNull();
+  });
+
+  it('should reject deletion with wrong password', async () => {
+    const session = await loginTestUser();
+
+    const response = await request(app)
+      .delete('/api/auth/account')
+      .set('Cookie', session.cookies)
+      .send({
+        password: 'WrongPassword123!',
+        confirmation: 'DELETE MY ACCOUNT'
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('INVALID_PASSWORD');
+  });
+
+  it('should reject deletion without confirmation phrase', async () => {
+    const session = await loginTestUser();
+
+    const response = await request(app)
+      .delete('/api/auth/account')
+      .set('Cookie', session.cookies)
+      .send({
+        password: 'SecurePass123!',
+        confirmation: 'delete my account'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('should cancel Stripe subscription before deletion', async () => {
+    const user = await createTestUserWithSubscription();
+    const session = await loginTestUser(user);
+
+    await request(app)
+      .delete('/api/auth/account')
+      .set('Cookie', session.cookies)
+      .send({
+        password: 'SecurePass123!',
+        confirmation: 'DELETE MY ACCOUNT'
+      });
+
+    // Verify subscription cancelled
+    const subscription = await stripe.subscriptions.retrieve(
+      user.stripe_subscription_id
+    );
+    expect(subscription.status).toBe('canceled');
+  });
+
+  it('should delete all user screenshots from storage', async () => {
+    const user = await createTestUserWithScreenshots(3);
+    const session = await loginTestUser(user);
+
+    await request(app)
+      .delete('/api/auth/account')
+      .set('Cookie', session.cookies)
+      .send({
+        password: 'SecurePass123!',
+        confirmation: 'DELETE MY ACCOUNT'
+      });
+
+    // Verify screenshots deleted
+    const { data } = await supabase
+      .from('screenshots')
+      .select('*')
+      .eq('user_id', user.id);
+
+    expect(data).toHaveLength(0);
+  });
+
+  it('should make email available for re-registration', async () => {
+    const email = 'reuse@example.com';
+    const user = await createTestUser({ email });
+    const session = await loginTestUser(user);
+
+    // Delete account
+    await request(app)
+      .delete('/api/auth/account')
+      .set('Cookie', session.cookies)
+      .send({
+        password: 'SecurePass123!',
+        confirmation: 'DELETE MY ACCOUNT'
+      });
+
+    // Try to register with same email
+    const response = await request(app)
+      .post('/api/auth/signup')
+      .send({
+        email,
+        password: 'NewPassword123!',
+        fullName: 'New User'
+      });
+
+    expect(response.status).toBe(200);
+  });
+});
+```
+
+---
+
 ## Security Notes
 
 ⚠️ **DO NOT** use these curl commands with production credentials or on public networks without HTTPS.
@@ -2013,6 +2737,10 @@ describe('POST /api/auth/magic-link', () => {
 ✅ **DO** test in local development environment with test accounts.
 
 ✅ **DO** verify HTTPS is enabled before testing in production.
+
+✅ **DO** verify complete data deletion after account removal (GDPR/CCPA compliance).
+
+✅ **DO** test account deletion flow before deploying to production.
 
 ---
 

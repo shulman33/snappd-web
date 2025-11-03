@@ -4,9 +4,14 @@
  * This middleware runs at the edge for every request and handles:
  * 1. Session token refresh (automatic token renewal)
  * 2. Protected route authentication checks
- * 3. IP-based rate limiting for /api/auth/* routes
+ * 3. IP-based rate limiting for /api/auth/* routes (with graceful degradation)
  * 4. Proper error responses with retry headers
  * 5. CORS headers for browser extension support
+ *
+ * Rate Limiting Strategy:
+ * - Fails open if Redis is unavailable (maintains service availability)
+ * - Logs Redis connection failures for monitoring/alerting
+ * - Rate limiting is defense-in-depth; authentication still enforced
  *
  * @see {@link https://nextjs.org/docs/app/building-your-application/routing/middleware}
  */
@@ -109,8 +114,33 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       request.headers.get('x-real-ip') ||
       '127.0.0.1';
 
-    // Check IP rate limit
-    const { success, limit, remaining, reset, pending } = await ipRateLimiter.limit(ip);
+    // Check IP rate limit with graceful degradation
+    // If Redis is unavailable, fail open (allow requests through) rather than
+    // blocking all authentication attempts. Rate limiting is defense-in-depth;
+    // the actual authentication layer still provides security.
+    let rateLimitResult;
+    try {
+      rateLimitResult = await ipRateLimiter.limit(ip);
+    } catch (error) {
+      // Log the Redis connection failure for monitoring/alerting
+      console.error('[Rate Limiter] Redis connection failed - failing open:', {
+        error: error instanceof Error ? error.message : String(error),
+        ip,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Fail open: allow the request through with default values
+      // This maintains service availability during Redis outages
+      rateLimitResult = {
+        success: true,
+        limit: 20, // Match the configured limit for consistency
+        remaining: 20,
+        reset: Date.now() + 15 * 60 * 1000, // 15 minutes from now
+        pending: Promise.resolve(),
+      };
+    }
+
+    const { success, limit, remaining, reset, pending } = rateLimitResult;
 
     // Handle pending analytics (required when analytics: true)
     // Use NextFetchEvent.waitUntil() to properly manage the promise lifecycle

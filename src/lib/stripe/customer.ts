@@ -26,9 +26,11 @@ import type { Database } from '@/types/supabase';
  * IMPORTANT: This client is initialized with the secret key and should only
  * be used in server-side contexts (API routes, server actions).
  * NEVER expose the secret key to the client.
+ *
+ * Note: API version defaults to the version pinned by stripe-node library.
+ * Currently: 2025-10-29.clover (stripe v19.2.0)
  */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-10-29.clover',
   typescript: true,
 });
 

@@ -28,7 +28,7 @@ import { AuthErrorHandler, AuthErrorCode, createAuthError } from '@/lib/auth/err
  * {
  *   "user": {
  *     "id": "uuid",
- *     "email": "user@example.com",
+ *     "email": "user@gmail.com",
  *     "emailVerified": false,
  *     "fullName": "John Doe",
  *     "plan": "free",

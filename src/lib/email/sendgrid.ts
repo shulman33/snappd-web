@@ -104,7 +104,7 @@ export class SendGridEmailService {
    * Send a generic email
    */
   static async send(options: SendEmailOptions): Promise<void> {
-    const msg: MailDataRequired = {
+    const msg = {
       to: options.to,
       from: options.from || DEFAULT_FROM,
       subject: options.subject,
@@ -116,7 +116,7 @@ export class SendGridEmailService {
       }),
       ...(options.categories && { categories: options.categories }),
       ...(options.customArgs && { customArgs: options.customArgs }),
-    };
+    } as MailDataRequired;
 
     try {
       await sgMail.send(msg);

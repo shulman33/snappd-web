@@ -149,13 +149,13 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 5
 
-- [ ] T051 [P] [US5] Use context7 to fetch Supabase Storage image transformation API documentation with focus on getPublicUrl transform parameter
-- [ ] T052 [US5] Use context7 to fetch Supabase Storage CDN caching documentation, then implement image URL generation with transformations in src/lib/uploads/storage.ts
-- [ ] T053 [P] [US5] Use Supabase MCP execute_sql to update screenshot records with optimized_path and thumbnail_path after upload
-- [ ] T054 [US5] Use context7 to fetch Supabase Storage transformation best practices, then configure transformation parameters (quality: 75, format optimization)
-- [ ] T055 [US5] Create thumbnail URL generation helper (200x150px, cover mode) in src/lib/uploads/storage.ts
-- [ ] T056 [US5] Add API endpoint GET /api/screenshots/[shortId]/url to return optimized and thumbnail URLs
-- [ ] T057 [US5] Use Supabase MCP execute_sql to verify file_size reduction after optimization, then test with various formats (PNG, JPEG, WEBP)
+- [X] T051 [P] [US5] Use context7 to fetch Supabase Storage image transformation API documentation with focus on getPublicUrl transform parameter
+- [X] T052 [US5] Use context7 to fetch Supabase Storage CDN caching documentation, then implement image URL generation with transformations in src/lib/uploads/storage.ts
+- [X] T053 [P] [US5] Use Supabase MCP execute_sql to update screenshot records with optimized_path and thumbnail_path after upload
+- [X] T054 [US5] Use context7 to fetch Supabase Storage transformation best practices, then configure transformation parameters (quality: 75, format optimization)
+- [X] T055 [US5] Create thumbnail URL generation helper (200x150px, cover mode) in src/lib/uploads/storage.ts
+- [X] T056 [US5] Add API endpoint GET /api/screenshots/[shortId]/url to return optimized and thumbnail URLs
+- [X] T057 [US5] Use Supabase MCP execute_sql to verify file_size reduction after optimization, then test with various formats (PNG, JPEG, WEBP)
 
 **Checkpoint**: Images load faster globally with automatic optimization
 

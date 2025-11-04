@@ -94,9 +94,12 @@ export function getPublicUrl(storagePath: string): string {
 /**
  * Get a public URL with Supabase image transformations
  *
+ * Uses Supabase Storage's built-in image transformation API
+ * to optimize images on the fly with CDN caching.
+ *
  * @param storagePath - The storage path
  * @param options - Transformation options
- * @returns Transformed image URL
+ * @returns Transformed image URL using Supabase's render endpoint
  */
 export function getTransformedImageUrl(
   storagePath: string,
@@ -104,15 +107,22 @@ export function getTransformedImageUrl(
     width?: number
     height?: number
     quality?: number
-    format?: 'webp' | 'jpeg' | 'png'
+    resize?: 'cover' | 'contain' | 'fill'
+    format?: 'origin' | 'webp'
   } = {}
 ): string {
-  const baseUrl = getPublicUrl(storagePath)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+
+  // Use Supabase's image transformation render endpoint
+  // Format: https://{project_id}.supabase.co/storage/v1/render/image/public/{bucket}/{path}
+  const baseUrl = `${supabaseUrl}/storage/v1/render/image/public/${BUCKET_NAME}/${storagePath}`
   const params = new URLSearchParams()
 
+  // Add transformation parameters according to Supabase API
   if (options.width) params.append('width', String(options.width))
   if (options.height) params.append('height', String(options.height))
   if (options.quality) params.append('quality', String(options.quality))
+  if (options.resize) params.append('resize', options.resize)
   if (options.format) params.append('format', options.format)
 
   const queryString = params.toString()
@@ -122,28 +132,36 @@ export function getTransformedImageUrl(
 /**
  * Get a thumbnail URL with optimized transformations
  *
+ * Creates a 200x150px thumbnail using cover mode (maintains aspect ratio,
+ * fills the size, and crops projecting parts). Automatically optimizes to
+ * WebP format with quality 75 for fast loading.
+ *
  * @param storagePath - The original storage path
- * @returns Thumbnail URL (200x150px, webp format, quality 75)
+ * @returns Thumbnail URL (200x150px, cover mode, webp, quality 75)
  */
 export function getThumbnailUrl(storagePath: string): string {
   return getTransformedImageUrl(storagePath, {
     width: 200,
     height: 150,
     quality: 75,
-    format: 'webp'
+    resize: 'cover' // Maintains aspect ratio, crops to fill dimensions
   })
 }
 
 /**
  * Get an optimized full-size URL
  *
+ * Optimizes the image for web delivery using WebP format with quality 75.
+ * Supabase automatically detects browser support and serves the best format.
+ * Does not resize, only optimizes compression.
+ *
  * @param storagePath - The original storage path
- * @returns Optimized URL (webp format, quality 75)
+ * @returns Optimized URL (webp format, quality 75, no resizing)
  */
 export function getOptimizedUrl(storagePath: string): string {
   return getTransformedImageUrl(storagePath, {
-    quality: 75,
-    format: 'webp'
+    quality: 75
+    // No format specified - let Supabase auto-detect and serve best format
   })
 }
 

@@ -86,11 +86,12 @@ export async function POST(
     // Retry logic: Allow retry if failed and under max retry limit (3 attempts)
     const MAX_RETRIES = 3
     if (uploadSession.upload_status === 'failed') {
-      if (uploadSession.retry_count >= MAX_RETRIES) {
+      const currentRetryCount = uploadSession.retry_count ?? 0
+      if (currentRetryCount >= MAX_RETRIES) {
         return NextResponse.json(
           {
             error: 'Upload session failed. Maximum retry attempts exceeded. Please start a new upload.',
-            retryCount: uploadSession.retry_count,
+            retryCount: currentRetryCount,
             maxRetries: MAX_RETRIES
           },
           { status: 400 }
@@ -102,13 +103,13 @@ export async function POST(
         .from('upload_sessions')
         .update({
           upload_status: 'uploading',
-          retry_count: uploadSession.retry_count + 1,
+          retry_count: currentRetryCount + 1,
           error_message: null
         })
         .eq('id', uploadSessionId)
 
       // Update local session object
-      uploadSession.retry_count += 1
+      uploadSession.retry_count = currentRetryCount + 1
       uploadSession.upload_status = 'uploading'
     }
 
@@ -235,13 +236,14 @@ export async function POST(
       }
 
       // Determine if error is retryable
-      const isRetryable = uploadSession.retry_count < MAX_RETRIES
+      const currentRetryCount = uploadSession.retry_count ?? 0
+      const isRetryable = currentRetryCount < MAX_RETRIES
 
       return NextResponse.json(
         {
           error: 'Failed to complete upload. Please try again.',
           retryable: isRetryable,
-          retryCount: uploadSession.retry_count,
+          retryCount: currentRetryCount,
           maxRetries: MAX_RETRIES
         },
         { status: 500 }
@@ -301,12 +303,13 @@ export async function POST(
           })
           .eq('id', uploadSessionId)
 
-        const isRetryable = session.retry_count < 3
+        const currentRetryCount = session.retry_count ?? 0
+        const isRetryable = currentRetryCount < 3
         return NextResponse.json(
           {
             error: 'Internal server error. Please try again later.',
             retryable: isRetryable,
-            retryCount: session.retry_count,
+            retryCount: currentRetryCount,
             maxRetries: 3
           },
           { status: 500 }

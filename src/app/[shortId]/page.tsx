@@ -12,6 +12,7 @@ import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import { getOptimizedUrl } from '@/lib/uploads/storage'
 import Image from 'next/image'
+import Link from 'next/link'
 
 interface SharePageProps {
   params: Promise<{
@@ -84,9 +85,9 @@ export default async function SharePage({ params }: SharePageProps) {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">
               Want permanent links for your screenshots?{' '}
-              <a href="/pricing" className="font-medium underline hover:text-blue-900">
+              <Link href="/pricing" className="font-medium underline hover:text-blue-900">
                 Upgrade to Pro
-              </a>
+              </Link>
             </p>
           </div>
         </div>
@@ -120,12 +121,12 @@ export default async function SharePage({ params }: SharePageProps) {
               This screenshot is private. Please sign in to view it.
             </p>
           </div>
-          <a
+          <Link
             href="/login"
             className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
             Sign In
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -192,9 +193,9 @@ export default async function SharePage({ params }: SharePageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <a href="/" className="text-2xl font-bold text-blue-600">
+              <Link href="/" className="text-2xl font-bold text-blue-600">
                 Snappd
-              </a>
+              </Link>
               {isOwner && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                   Your Screenshot
@@ -206,12 +207,12 @@ export default async function SharePage({ params }: SharePageProps) {
                 <span className="text-sm text-gray-600">{expirationMessage}</span>
               )}
               {!user && (
-                <a
+                <Link
                   href="/login"
                   className="text-sm font-medium text-blue-600 hover:text-blue-700"
                 >
                   Sign In
-                </a>
+                </Link>
               )}
             </div>
           </div>
@@ -247,12 +248,12 @@ export default async function SharePage({ params }: SharePageProps) {
                 </p>
               </div>
               {isOwner && (
-                <a
+                <Link
                   href="/dashboard/screenshots"
                   className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
                   View Dashboard
-                </a>
+                </Link>
               )}
             </div>
 
@@ -291,12 +292,12 @@ export default async function SharePage({ params }: SharePageProps) {
             <p className="text-blue-100 mb-6">
               Upload, share, and track your screenshots with Snappd
             </p>
-            <a
+            <Link
               href="/signup"
               className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-white hover:bg-gray-50 transition-colors"
             >
               Get Started for Free
-            </a>
+            </Link>
           </div>
         )}
       </main>

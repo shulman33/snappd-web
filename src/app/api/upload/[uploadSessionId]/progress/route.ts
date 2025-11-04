@@ -45,7 +45,7 @@ export async function GET(
 
     // Calculate progress percentage
     const progressPercentage = session.file_size > 0
-      ? Math.round((session.bytes_uploaded / session.file_size) * 100)
+      ? Math.round(((session.bytes_uploaded ?? 0) / session.file_size) * 100)
       : 0
 
     // Return progress information

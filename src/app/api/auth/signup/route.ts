@@ -86,6 +86,8 @@ export async function POST(request: NextRequest) {
       options: {
         data: {
           full_name: fullName || null,
+          first_name: fullName ? fullName.split(' ')[0] : null,
+          last_name: fullName ? fullName.split(' ').slice(1).join(' ') : null,
         },
         // Redirect URL after email confirmation (optional)
         emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,

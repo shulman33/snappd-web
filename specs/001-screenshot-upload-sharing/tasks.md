@@ -79,10 +79,8 @@ Using Next.js 15 App Router structure:
 - [X] T028 [US1] Use Supabase MCP execute_sql to test quota trigger behavior, then create POST /api/upload/[uploadSessionId]/complete route in app/api/upload/[uploadSessionId]/complete/route.ts
 - [X] T029 [P] [US1] Use Supabase MCP execute_sql to query monthly_usage table structure, then create quota checking utilities in src/lib/uploads/quota.ts
 - [X] T030 [US1] Implement short ID generation and screenshot record creation in complete upload route
-- [X] T031 [US1] Use context7 to fetch Next.js 15 dynamic routes documentation, then create share page in app/[shortId]/page.tsx for viewing public screenshots
-- [X] T032 [P] [US1] Use Supabase MCP get_project_url to configure public URL for share links
-- [X] T033 [US1] Add expiration checking logic to share page (30 days for free tier)
-- [X] T034 [US1] Use Supabase MCP execute_sql to verify screenshot record created, then test complete upload flow: init → upload → complete → view share link
+- [X] T031 [P] [US1] Use Supabase MCP get_project_url to configure public URL for share links
+- [X] T032 [US1] Use Supabase MCP execute_sql to verify screenshot record created, then test complete upload flow: init → upload → complete
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - users can upload and share screenshots
 
@@ -96,12 +94,11 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 2
 
-- [ ] T035 [P] [US2] Use context7 to fetch Next.js 15 route handlers documentation, then create GET /api/upload/[uploadSessionId]/progress route in app/api/upload/[uploadSessionId]/progress/route.ts
-- [ ] T036 [US2] Use Supabase MCP execute_sql to query upload_sessions table for status tracking, then implement upload session status tracking with retry count logic
-- [ ] T037 [P] [US2] Use context7 to fetch Supabase Realtime broadcast channels documentation, then create client-side progress tracking component for browser extension
-- [ ] T038 [US2] Add automatic retry logic (max 3 attempts) to upload completion handler
-- [ ] T039 [US2] Implement error state handling and user-facing error messages
-- [ ] T040 [US2] Use Supabase MCP execute_sql to verify retry_count increments correctly, then test with simulated network interruptions and verify retry mechanism
+- [X] T035 [P] [US2] Use context7 to fetch Next.js 15 route handlers documentation, then create GET /api/upload/[uploadSessionId]/progress route in app/api/upload/[uploadSessionId]/progress/route.ts
+- [X] T036 [US2] Use Supabase MCP execute_sql to query upload_sessions table for status tracking, then implement upload session status tracking with retry count logic
+- [X] T037 [US2] Add automatic retry logic (max 3 attempts) to upload completion handler
+- [X] T038 [US2] Implement error state handling and API error response messages
+- [X] T039 [US2] Use Supabase MCP execute_sql to verify retry_count increments correctly, then test with simulated network interruptions and verify retry mechanism
 
 **Checkpoint**: Upload reliability significantly improved with progress feedback and retry
 
@@ -115,12 +112,11 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 3
 
-- [ ] T041 [P] [US3] Use Supabase MCP execute_sql to verify quota trigger fires correctly by inserting test screenshot records
-- [ ] T042 [US3] Use context7 to fetch Next.js 15 server components data fetching patterns, then create GET /api/user/usage route in app/api/user/usage/route.ts
-- [ ] T043 [P] [US3] Use Supabase MCP execute_sql to query monthly_usage aggregation, then implement quota display component showing "X of 10 screenshots used this month"
-- [ ] T044 [US3] Add quota exceeded error handling in upload init route with upgrade message
-- [ ] T045 [US3] Use Supabase MCP execute_sql to manually update monthly_usage month field, then verify monthly usage counter resets correctly (test date boundary logic)
-- [ ] T046 [US3] Use Supabase MCP execute_sql to verify trigger blocks 11th upload, then test quota enforcement: 10th upload succeeds, 11th fails with proper error
+- [X] T040 [P] [US3] Use Supabase MCP execute_sql to verify quota trigger fires correctly by inserting test screenshot records
+- [X] T041 [US3] Create GET /api/user/usage route in app/api/user/usage/route.ts to return current usage and quota limits
+- [X] T042 [US3] Add quota exceeded error handling in upload init route with upgrade message
+- [X] T043 [US3] Use Supabase MCP execute_sql to manually update monthly_usage month field, then verify monthly usage counter resets correctly (test date boundary logic)
+- [X] T044 [US3] Use Supabase MCP execute_sql to verify trigger blocks 11th upload, then test quota enforcement: 10th upload succeeds, 11th fails with proper error
 
 **Checkpoint**: Quota system enforcing limits and driving upgrade path
 
@@ -134,13 +130,12 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 4
 
-- [ ] T047 [P] [US4] Use context7 to fetch Next.js 15 documentation on handling multiple concurrent API requests and Promise.allSettled patterns
-- [ ] T048 [US4] Use Supabase MCP execute_sql to test batch insert performance on upload_sessions table, then update upload init route to support batch upload metadata
-- [ ] T049 [P] [US4] Use context7 to fetch Supabase Realtime documentation for broadcasting batch progress, then implement batch progress tracking in upload session logic
-- [ ] T050 [US4] Use Supabase MCP execute_sql to test quota trigger with concurrent inserts, then add quota checking for batch uploads (respect remaining quota)
-- [ ] T051 [US4] Implement partial success handling (some uploads succeed, some fail)
-- [ ] T052 [US4] Create batch status aggregation (e.g., "3 of 5 completed")
-- [ ] T053 [US4] Use Supabase MCP execute_sql to set user monthly_usage to 8/10, then test batch upload with quota enforcement (free user with 8/10 uploads attempting 5-batch)
+- [X] T045 [P] [US4] Use context7 to fetch Next.js 15 documentation on handling multiple concurrent API requests and Promise.allSettled patterns
+- [X] T046 [US4] Use Supabase MCP execute_sql to test batch insert performance on upload_sessions table, then update upload init route to support batch upload metadata
+- [X] T047 [US4] Implement batch progress tracking in upload session logic with status aggregation
+- [X] T048 [US4] Use Supabase MCP execute_sql to test quota trigger with concurrent inserts, then add quota checking for batch uploads (respect remaining quota)
+- [X] T049 [US4] Implement partial success handling (some uploads succeed, some fail) with detailed API response
+- [X] T050 [US4] Use Supabase MCP execute_sql to set user monthly_usage to 8/10, then test batch upload with quota enforcement (free user with 8/10 uploads attempting 5-batch)
 
 **Checkpoint**: Batch upload enhances power user efficiency
 
@@ -154,14 +149,13 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 5
 
-- [ ] T054 [P] [US5] Use context7 to fetch Supabase Storage image transformation API documentation with focus on getPublicUrl transform parameter
-- [ ] T055 [US5] Use context7 to fetch Supabase Storage CDN caching documentation, then implement image URL generation with transformations in src/lib/uploads/storage.ts
-- [ ] T056 [P] [US5] Use Supabase MCP execute_sql to update screenshot records with optimized_path and thumbnail_path after upload
-- [ ] T057 [US5] Use context7 to fetch Supabase Storage transformation best practices, then configure transformation parameters (quality: 75, format optimization)
-- [ ] T058 [US5] Create thumbnail URL generation helper (200x150px, cover mode)
-- [ ] T059 [US5] Update share page to use optimized image URLs with Supabase transformations
-- [ ] T060 [US5] Update dashboard to use thumbnail URLs for list views
-- [ ] T061 [US5] Use Supabase MCP execute_sql to verify file_size reduction after optimization, then test with various formats (PNG, JPEG, WEBP)
+- [ ] T051 [P] [US5] Use context7 to fetch Supabase Storage image transformation API documentation with focus on getPublicUrl transform parameter
+- [ ] T052 [US5] Use context7 to fetch Supabase Storage CDN caching documentation, then implement image URL generation with transformations in src/lib/uploads/storage.ts
+- [ ] T053 [P] [US5] Use Supabase MCP execute_sql to update screenshot records with optimized_path and thumbnail_path after upload
+- [ ] T054 [US5] Use context7 to fetch Supabase Storage transformation best practices, then configure transformation parameters (quality: 75, format optimization)
+- [ ] T055 [US5] Create thumbnail URL generation helper (200x150px, cover mode) in src/lib/uploads/storage.ts
+- [ ] T056 [US5] Add API endpoint GET /api/screenshots/[shortId]/url to return optimized and thumbnail URLs
+- [ ] T057 [US5] Use Supabase MCP execute_sql to verify file_size reduction after optimization, then test with various formats (PNG, JPEG, WEBP)
 
 **Checkpoint**: Images load faster globally with automatic optimization
 
@@ -175,13 +169,11 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 6
 
-- [ ] T062 [P] [US6] Use context7 to fetch Web APIs documentation for image metadata extraction, then update complete upload route to extract image metadata (dimensions, mime type)
-- [ ] T063 [P] [US6] Use context7 to fetch Next.js 15 App Router pagination patterns, then create GET /api/screenshots route in app/api/screenshots/route.ts for listing user screenshots
-- [ ] T064 [US6] Use Supabase MCP execute_sql to test query performance with ORDER BY and LIMIT clauses, then add pagination, sorting (by date, views, size) to screenshots list endpoint
-- [ ] T065 [P] [US6] Use context7 to fetch Next.js 15 server components documentation, then create dashboard page in app/dashboard/screenshots/page.tsx
-- [ ] T066 [US6] Implement screenshot grid component with metadata tooltips
-- [ ] T067 [US6] Use context7 to fetch date-fns or similar library documentation for relative time formatting, then add relative timestamp formatting ("2 hours ago")
-- [ ] T068 [US6] Use Supabase MCP execute_sql to insert test screenshots with varying metadata, then test metadata display across different screenshot sizes and types
+- [ ] T058 [P] [US6] Use context7 to fetch Web APIs documentation for image metadata extraction, then update complete upload route to extract image metadata (dimensions, mime type)
+- [ ] T059 [P] [US6] Use context7 to fetch Next.js 15 App Router pagination patterns, then create GET /api/screenshots route in app/api/screenshots/route.ts for listing user screenshots
+- [ ] T060 [US6] Use Supabase MCP execute_sql to test query performance with ORDER BY and LIMIT clauses, then add pagination, sorting (by date, views, size) to screenshots list endpoint
+- [ ] T061 [US6] Add metadata fields to screenshots list API response (dimensions, file_size, views, created_at, mime_type)
+- [ ] T062 [US6] Use Supabase MCP execute_sql to insert test screenshots with varying metadata, then test metadata display across different screenshot sizes and types
 
 **Checkpoint**: Users can organize and understand their screenshot library
 
@@ -195,16 +187,16 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 7
 
-- [ ] T069 [P] [US7] Use context7 to fetch bcryptjs documentation for password hashing with focus on compare and hash functions
-- [ ] T070 [US7] Use context7 to fetch bcrypt best practices for cost factor selection, then implement password hashing in src/lib/uploads/security.ts using bcrypt (cost factor 10)
-- [ ] T071 [P] [US7] Use Supabase MCP execute_sql to verify password_hash column accepts bcrypt hashed values, then update upload init route to support password parameter for password-protected mode
-- [ ] T072 [US7] Use Supabase MCP execute_sql to test sharing_mode constraint validation, then add sharing mode validation to upload routes (public/private/password)
-- [ ] T073 [US7] Use context7 to fetch Next.js 15 middleware documentation for auth checks, then update share page to check sharing_mode and enforce access control
-- [ ] T074 [P] [US7] Create password verification component for password-protected screenshots
-- [ ] T075 [US7] Use context7 to fetch @upstash/ratelimit documentation for sliding window algorithm, then implement rate limiting on password attempts using @upstash/ratelimit (3 attempts per 5 min)
-- [ ] T076 [US7] Use context7 to fetch @supabase/ssr documentation for getUser authentication, then add authentication check for private mode screenshots
-- [ ] T077 [US7] Use Supabase MCP execute_sql to insert test screenshots with each sharing mode, then test all three modes: public (no auth), private (auth required), password (correct password required)
-- [ ] T078 [US7] Test password rate limiting (3 failed attempts triggers 5-minute lockout)
+- [ ] T063 [P] [US7] Use context7 to fetch bcryptjs documentation for password hashing with focus on compare and hash functions
+- [ ] T064 [US7] Use context7 to fetch bcrypt best practices for cost factor selection, then implement password hashing in src/lib/uploads/security.ts using bcrypt (cost factor 10)
+- [ ] T065 [P] [US7] Use Supabase MCP execute_sql to verify password_hash column accepts bcrypt hashed values, then update upload init route to support password parameter for password-protected mode
+- [ ] T066 [US7] Use Supabase MCP execute_sql to test sharing_mode constraint validation, then add sharing mode validation to upload routes (public/private/password)
+- [ ] T067 [US7] Create POST /api/screenshots/[shortId]/verify-password route for password verification
+- [ ] T068 [US7] Use context7 to fetch @upstash/ratelimit documentation for sliding window algorithm, then implement rate limiting on password attempts using @upstash/ratelimit (3 attempts per 5 min)
+- [ ] T069 [US7] Create GET /api/screenshots/[shortId]/access route to check sharing_mode and enforce access control
+- [ ] T070 [US7] Use context7 to fetch @supabase/ssr documentation for getUser authentication, then add authentication check for private mode screenshots
+- [ ] T071 [US7] Use Supabase MCP execute_sql to insert test screenshots with each sharing mode, then test all three modes: public (no auth), private (auth required), password (correct password required)
+- [ ] T072 [US7] Test password rate limiting (3 failed attempts triggers 5-minute lockout)
 
 **Checkpoint**: Secure sharing of sensitive content enabled
 
@@ -218,13 +210,12 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 8
 
-- [ ] T079 [P] [US8] Use context7 to fetch JavaScript Date API documentation for timestamp calculations, then update upload init route to support expiresIn parameter (in seconds)
-- [ ] T080 [US8] Use Supabase MCP execute_sql to verify expires_at timestamp storage and indexing, then implement expiration calculation and storage in screenshot record
-- [ ] T081 [P] [US8] Use context7 to fetch React hooks documentation for countdown timers, then add countdown timer component for temporary links
-- [ ] T082 [US8] Update share page to display expiration countdown ("Expires in 10 minutes")
-- [ ] T083 [US8] Use context7 to fetch @supabase/ssr documentation for user session checks, then implement owner bypass for expired screenshots (show "expired for public viewing" message)
-- [ ] T084 [US8] Use Supabase MCP execute_sql to insert screenshots with various expires_at timestamps, then test various expiration times (1 hour, 24 hours, custom)
-- [ ] T085 [US8] Use Supabase MCP execute_sql to manually set expires_at to past timestamp, then verify expired links show appropriate error message to non-owners
+- [ ] T073 [P] [US8] Use context7 to fetch JavaScript Date API documentation for timestamp calculations, then update upload init route to support expiresIn parameter (in seconds)
+- [ ] T074 [US8] Use Supabase MCP execute_sql to verify expires_at timestamp storage and indexing, then implement expiration calculation and storage in screenshot record
+- [ ] T075 [US8] Update GET /api/screenshots/[shortId]/access route to check expiration and return expiration status
+- [ ] T076 [US8] Use context7 to fetch @supabase/ssr documentation for user session checks, then implement owner bypass for expired screenshots in access route
+- [ ] T077 [US8] Use Supabase MCP execute_sql to insert screenshots with various expires_at timestamps, then test various expiration times (1 hour, 24 hours, custom)
+- [ ] T078 [US8] Use Supabase MCP execute_sql to manually set expires_at to past timestamp, then verify expired links show appropriate error response to non-owners
 
 **Checkpoint**: Time-sensitive content sharing supported
 
@@ -238,15 +229,12 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 9
 
-- [ ] T086 [P] [US9] Use context7 to fetch Next.js 15 DELETE method documentation for route handlers, then create DELETE /api/screenshots/[shortId] route in app/api/screenshots/[shortId]/route.ts
-- [ ] T087 [P] [US9] Use context7 to fetch Supabase transaction documentation for atomic bulk operations, then create POST /api/screenshots/bulk-delete route in app/api/screenshots/bulk-delete/route.ts
-- [ ] T088 [US9] Use context7 to fetch Supabase Storage remove() API documentation with batch deletion examples, then implement storage file deletion using Supabase Storage remove() API
-- [ ] T089 [US9] Use Supabase MCP execute_sql to verify update_monthly_usage_on_delete trigger fires correctly, then confirm monthly_usage updates on deletion via existing trigger
-- [ ] T090 [P] [US9] Use context7 to fetch React controlled checkbox patterns, then add bulk selection UI to dashboard (checkboxes, select all)
-- [ ] T091 [US9] Implement confirmation dialog for bulk deletion
-- [ ] T092 [US9] Use Supabase MCP execute_sql to query monthly_usage in real-time, then update storage usage display immediately after deletion
-- [ ] T093 [US9] Use Supabase MCP execute_sql to batch insert 50 test screenshots, then test bulk delete with 50 screenshots and verify all removed
-- [ ] T094 [US9] Use Supabase MCP execute_sql to verify storage_bytes in monthly_usage decreases correctly after bulk deletion
+- [ ] T079 [P] [US9] Use context7 to fetch Next.js 15 DELETE method documentation for route handlers, then create DELETE /api/screenshots/[shortId] route in app/api/screenshots/[shortId]/route.ts
+- [ ] T080 [P] [US9] Use context7 to fetch Supabase transaction documentation for atomic bulk operations, then create POST /api/screenshots/bulk-delete route in app/api/screenshots/bulk-delete/route.ts
+- [ ] T081 [US9] Use context7 to fetch Supabase Storage remove() API documentation with batch deletion examples, then implement storage file deletion using Supabase Storage remove() API
+- [ ] T082 [US9] Use Supabase MCP execute_sql to verify update_monthly_usage_on_delete trigger fires correctly, then confirm monthly_usage updates on deletion via existing trigger
+- [ ] T083 [US9] Use Supabase MCP execute_sql to batch insert 50 test screenshots, then test bulk delete with 50 screenshots and verify all removed
+- [ ] T084 [US9] Use Supabase MCP execute_sql to verify storage_bytes in monthly_usage decreases correctly after bulk deletion
 
 **Checkpoint**: Large screenshot libraries easily manageable
 
@@ -260,18 +248,16 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 10
 
-- [ ] T095 [P] [US10] Use context7 to fetch Next.js 15 headers documentation for extracting x-forwarded-for, then create POST /api/share/[shortId]/track route in app/api/share/[shortId]/track/route.ts
-- [ ] T096 [US10] Use context7 to fetch Web Crypto API SHA-256 documentation, then implement IP hashing in src/lib/analytics/tracking.ts using SHA-256 with salt
-- [ ] T097 [P] [US10] Use context7 to fetch Vercel Edge runtime geolocation API documentation, then add IP geolocation using Vercel Edge runtime geolocation
-- [ ] T098 [US10] Use Supabase MCP execute_sql to test view_events insert with is_owner flag, then implement view event logging with owner detection (exclude owner views)
-- [ ] T099 [US10] Use context7 to fetch Supabase aggregation query patterns, then create GET /api/screenshots/[shortId]/analytics route in app/api/screenshots/[shortId]/analytics/route.ts
-- [ ] T100 [P] [US10] Use Supabase MCP execute_sql to test GROUP BY date aggregation performance on view_events, then implement daily stats aggregation query from view_events table
-- [ ] T101 [US10] Use Supabase MCP execute_sql to test country_stats JSONB aggregation, then add country-level geographic distribution aggregation
-- [ ] T102 [P] [US10] Use context7 to fetch charting library documentation (e.g., recharts), then create analytics dashboard component with daily bar chart
-- [ ] T103 [US10] Use Supabase MCP execute_sql to test ORDER BY views DESC query performance, then add "Sort by Most Viewed" functionality to screenshot list
-- [ ] T104 [US10] Implement client-side view tracking component for share page
-- [ ] T105 [US10] Use Supabase MCP execute_sql to insert test view_events with different countries and timestamps, then test analytics: multiple views, verify counts and geographic data
-- [ ] T106 [US10] Use Supabase MCP execute_sql to verify is_owner=true views excluded from aggregation, then verify owner views excluded from public analytics
+- [ ] T085 [P] [US10] Use context7 to fetch Next.js 15 headers documentation for extracting x-forwarded-for, then create POST /api/screenshots/[shortId]/track-view route in app/api/screenshots/[shortId]/track-view/route.ts
+- [ ] T086 [US10] Use context7 to fetch Web Crypto API SHA-256 documentation, then implement IP hashing in src/lib/analytics/tracking.ts using SHA-256 with salt
+- [ ] T087 [P] [US10] Use context7 to fetch Vercel Edge runtime geolocation API documentation, then add IP geolocation using Vercel Edge runtime geolocation
+- [ ] T088 [US10] Use Supabase MCP execute_sql to test view_events insert with is_owner flag, then implement view event logging with owner detection (exclude owner views)
+- [ ] T089 [US10] Use context7 to fetch Supabase aggregation query patterns, then create GET /api/screenshots/[shortId]/analytics route in app/api/screenshots/[shortId]/analytics/route.ts
+- [ ] T090 [P] [US10] Use Supabase MCP execute_sql to test GROUP BY date aggregation performance on view_events, then implement daily stats aggregation query from view_events table
+- [ ] T091 [US10] Use Supabase MCP execute_sql to test country_stats JSONB aggregation, then add country-level geographic distribution aggregation to analytics endpoint
+- [ ] T092 [US10] Update GET /api/screenshots route to support sorting by view count (ORDER BY views DESC)
+- [ ] T093 [US10] Use Supabase MCP execute_sql to insert test view_events with different countries and timestamps, then test analytics: multiple views, verify counts and geographic data
+- [ ] T094 [US10] Use Supabase MCP execute_sql to verify is_owner=true views excluded from aggregation, then verify owner views excluded from public analytics
 
 **Checkpoint**: Users gain insights into content reach and engagement
 
@@ -281,18 +267,17 @@ Using Next.js 15 App Router structure:
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T107 [P] Use Supabase MCP get_advisors with type='security' and type='performance' for final audit recommendations
-- [ ] T108 [P] Use context7 to fetch Next.js 15 performance optimization best practices including ISR, caching, and bundle optimization
-- [ ] T109 Use context7 to fetch Next.js 15 error handling patterns, then add comprehensive error handling across all API routes
-- [ ] T110 [P] Use context7 to fetch structured logging best practices for Next.js, then implement logging for all upload operations using console structured logging
-- [ ] T111 [P] Use context7 to fetch @upstash/ratelimit documentation for multiple limiters per application, then add rate limiting to all public endpoints using @upstash/ratelimit
-- [ ] T112 Use Supabase MCP get_advisors with type='performance' to identify missing indexes, then optimize database queries with proper indexes
-- [ ] T113 [P] Use context7 to fetch Next.js 15 caching documentation, then configure CDN caching headers for optimized images
-- [ ] T114 Use Supabase MCP list_tables to review all RLS policies, then review and update RLS policies for security hardening
-- [ ] T115 [P] Use context7 to fetch OpenAPI validation tools documentation, then add OpenAPI documentation validation against contracts/openapi.yaml
-- [ ] T116 Run through quickstart.md validation steps
-- [ ] T117 [P] Use Supabase MCP execute_sql to analyze quota trigger execution time with EXPLAIN ANALYZE, then add monitoring for quota trigger performance
-- [ ] T118 Use context7 to fetch Supabase Edge Functions documentation and pg_cron examples, then configure cleanup job for expired screenshots (pg_cron or Edge Function)
+- [ ] T095 [P] Use Supabase MCP get_advisors with type='security' and type='performance' for final audit recommendations
+- [ ] T096 [P] Use context7 to fetch Next.js 15 performance optimization best practices including ISR, caching, and bundle optimization
+- [ ] T097 Use context7 to fetch Next.js 15 error handling patterns, then add comprehensive error handling across all API routes
+- [ ] T098 [P] Use context7 to fetch structured logging best practices for Next.js, then implement logging for all upload operations using console structured logging
+- [ ] T099 [P] Use context7 to fetch @upstash/ratelimit documentation for multiple limiters per application, then add rate limiting to all public endpoints using @upstash/ratelimit
+- [ ] T100 Use Supabase MCP get_advisors with type='performance' to identify missing indexes, then optimize database queries with proper indexes
+- [ ] T101 [P] Use context7 to fetch Next.js 15 caching documentation, then configure CDN caching headers for optimized images in API responses
+- [ ] T102 Use Supabase MCP list_tables to review all RLS policies, then review and update RLS policies for security hardening
+- [ ] T103 [P] Use context7 to fetch OpenAPI validation tools documentation, then add OpenAPI documentation validation against contracts/openapi.yaml
+- [ ] T104 [P] Use Supabase MCP execute_sql to analyze quota trigger execution time with EXPLAIN ANALYZE, then add monitoring for quota trigger performance
+- [ ] T105 Use context7 to fetch Supabase Edge Functions documentation and pg_cron examples, then configure cleanup job for expired screenshots (pg_cron or Edge Function)
 
 ---
 
@@ -461,46 +446,48 @@ With multiple developers:
 
 ## Task Summary
 
-**Total Tasks**: 118
-**MVP Tasks (P1 Stories 1-3)**: Setup (4) + Foundational (20) + US1 (10) + US2 (6) + US3 (6) = **46 tasks**
+**Total Tasks**: 105 (API-focused, UI components removed)
+**MVP Tasks (P1 Stories 1-3)**: Setup (4) + Foundational (20) + US1 (8) + US2 (5) + US3 (5) = **42 tasks**
 
 **Task Distribution by User Story**:
 - Setup: 4 tasks
 - Foundational: 20 tasks (BLOCKS all stories)
-- User Story 1 (P1): 10 tasks
-- User Story 2 (P1): 6 tasks
-- User Story 3 (P1): 6 tasks
-- User Story 4 (P2): 7 tasks
-- User Story 5 (P2): 8 tasks
-- User Story 6 (P2): 7 tasks
-- User Story 7 (P2): 10 tasks
-- User Story 8 (P3): 7 tasks
-- User Story 9 (P3): 9 tasks
-- User Story 10 (P3): 12 tasks
-- Polish: 12 tasks
+- User Story 1 (P1): 8 tasks (API-only)
+- User Story 2 (P1): 5 tasks (API-only)
+- User Story 3 (P1): 5 tasks (API-only)
+- User Story 4 (P2): 6 tasks (API-only)
+- User Story 5 (P2): 7 tasks (API-only)
+- User Story 6 (P2): 5 tasks (API-only)
+- User Story 7 (P2): 10 tasks (API-only)
+- User Story 8 (P3): 6 tasks (API-only)
+- User Story 9 (P3): 6 tasks (API-only)
+- User Story 10 (P3): 10 tasks (API-only)
+- Polish: 11 tasks (API-only)
 
-**Parallel Opportunities Identified**: 38 tasks marked [P] can run in parallel within their phases
+**Parallel Opportunities Identified**: 35+ tasks marked [P] can run in parallel within their phases
 
-**Independent Test Criteria**:
-- US1: Upload screenshot → Get share link → Access link publicly
-- US2: Upload large file → See progress → Simulate failure → Verify retry
-- US3: Upload 10 screenshots → Attempt 11th → See quota error
-- US4: Select 5 screenshots → Batch upload → See unified progress
-- US5: Upload 12MB file → Verify compression → Check thumbnail speed
-- US6: Upload screenshot → View dashboard → See all metadata
-- US7: Create password-protected screenshot → Verify password required
-- US8: Create 1-hour expiration link → Wait → Verify expired
-- US9: Select 10 screenshots → Bulk delete → Verify all removed
-- US10: Share link → Access from multiple locations → View analytics
+**Independent Test Criteria (API Testing)**:
+- US1: Upload screenshot via API → Get share link → Verify link resolves
+- US2: Upload large file → Check progress endpoint → Simulate failure → Verify retry
+- US3: Upload 10 screenshots → Attempt 11th → Verify quota error response
+- US4: Batch upload 5 screenshots via API → Check batch progress
+- US5: Upload 12MB file → Verify optimized URL returns smaller image
+- US6: Upload screenshot → Query list endpoint → Verify all metadata returned
+- US7: Create password-protected screenshot → Verify password endpoint blocks access
+- US8: Create 1-hour expiration link → Verify access endpoint returns expiration status
+- US9: Delete multiple screenshots via bulk-delete endpoint → Verify all removed
+- US10: Share link → Track views via API → Query analytics endpoint
 
-**Suggested MVP Scope**: User Stories 1-3 (46 tasks total, all P1 priority)
+**Suggested MVP Scope**: User Stories 1-3 (42 tasks total, all P1 priority)
 - Delivers core value: Upload, share, reliability, quota enforcement
 - Enables business model validation (free vs pro tiers)
 - Can be completed in ~1-2 weeks with single developer
+- **Note**: UI components are excluded - focus is on building robust APIs first
 
 **Format Validation**: ✅ All tasks follow checklist format with:
-- Checkbox `- [ ]`
-- Task ID (T001-T118)
-- [P] marker for parallelizable tasks (38 tasks)
+- Checkbox `- [ ]` or `- [X]`
+- Task ID (T001-T105)
+- [P] marker for parallelizable tasks (35+ tasks)
 - [Story] label for user story tasks (US1-US10)
 - Clear descriptions with exact file paths
+- **API-focused**: All UI component tasks removed to focus on backend infrastructure

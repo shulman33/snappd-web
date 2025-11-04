@@ -83,11 +83,33 @@ export async function POST(
       )
     }
 
+    // Retry logic: Allow retry if failed and under max retry limit (3 attempts)
+    const MAX_RETRIES = 3
     if (uploadSession.upload_status === 'failed') {
-      return NextResponse.json(
-        { error: 'Upload session failed. Please start a new upload.' },
-        { status: 400 }
-      )
+      if (uploadSession.retry_count >= MAX_RETRIES) {
+        return NextResponse.json(
+          {
+            error: 'Upload session failed. Maximum retry attempts exceeded. Please start a new upload.',
+            retryCount: uploadSession.retry_count,
+            maxRetries: MAX_RETRIES
+          },
+          { status: 400 }
+        )
+      }
+
+      // Allow retry - increment retry count
+      await supabase
+        .from('upload_sessions')
+        .update({
+          upload_status: 'uploading',
+          retry_count: uploadSession.retry_count + 1,
+          error_message: null
+        })
+        .eq('id', uploadSessionId)
+
+      // Update local session object
+      uploadSession.retry_count += 1
+      uploadSession.upload_status = 'uploading'
     }
 
     // Check for duplicate file (same hash for same user)
@@ -188,11 +210,21 @@ export async function POST(
     if (screenshotError) {
       console.error('Failed to create screenshot record:', screenshotError)
 
+      // Update upload session to failed status with error message
+      await supabase
+        .from('upload_sessions')
+        .update({
+          upload_status: 'failed',
+          error_message: screenshotError.message || 'Failed to create screenshot record'
+        })
+        .eq('id', uploadSessionId)
+
       // Check if it's a quota error
       if (screenshotError.message?.includes('quota exceeded')) {
         return NextResponse.json(
           {
             error: 'Monthly upload quota exceeded',
+            retryable: false,
             upgrade: {
               message: 'Upgrade to Pro for unlimited uploads',
               url: '/pricing'
@@ -202,8 +234,16 @@ export async function POST(
         )
       }
 
+      // Determine if error is retryable
+      const isRetryable = uploadSession.retry_count < MAX_RETRIES
+
       return NextResponse.json(
-        { error: 'Failed to complete upload. Please try again.' },
+        {
+          error: 'Failed to complete upload. Please try again.',
+          retryable: isRetryable,
+          retryCount: uploadSession.retry_count,
+          maxRetries: MAX_RETRIES
+        },
         { status: 500 }
       )
     }
@@ -240,6 +280,42 @@ export async function POST(
     )
   } catch (error) {
     console.error('Error in /api/upload/[uploadSessionId]/complete:', error)
+
+    // Try to update upload session to failed status
+    try {
+      const supabase = await createServerClient()
+      const { uploadSessionId } = await context.params
+
+      const { data: session } = await supabase
+        .from('upload_sessions')
+        .select('retry_count')
+        .eq('id', uploadSessionId)
+        .single()
+
+      if (session) {
+        await supabase
+          .from('upload_sessions')
+          .update({
+            upload_status: 'failed',
+            error_message: error instanceof Error ? error.message : 'Internal server error'
+          })
+          .eq('id', uploadSessionId)
+
+        const isRetryable = session.retry_count < 3
+        return NextResponse.json(
+          {
+            error: 'Internal server error. Please try again later.',
+            retryable: isRetryable,
+            retryCount: session.retry_count,
+            maxRetries: 3
+          },
+          { status: 500 }
+        )
+      }
+    } catch (updateError) {
+      console.error('Failed to update session status on error:', updateError)
+    }
+
     return NextResponse.json(
       { error: 'Internal server error. Please try again later.' },
       { status: 500 }

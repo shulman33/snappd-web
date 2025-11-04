@@ -40,6 +40,17 @@ import { AuthErrorHandler, AuthErrorCode, createAuthError } from '@/lib/auth/err
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 /**
+ * Result from the delete_user_data database function
+ */
+type DeleteUserDataResult = {
+  screenshots_deleted: number;
+  monthly_usage_deleted: number;
+  auth_events_deleted: number;
+  profile_deleted: number;
+  storage_paths: string[];
+};
+
+/**
  * DELETE /api/auth/account
  *
  * Permanently deletes user account and all associated data
@@ -246,13 +257,14 @@ export async function DELETE(request: NextRequest) {
       }
 
       // Extract storage paths from the deletion result for cleanup
-      storagePaths = deletionResult.storage_paths || [];
+      const result = deletionResult as DeleteUserDataResult;
+      storagePaths = result.storage_paths || [];
 
       console.log('Atomically deleted user data:', {
-        screenshots: deletionResult.screenshots_deleted,
-        monthly_usage: deletionResult.monthly_usage_deleted,
-        auth_events: deletionResult.auth_events_deleted,
-        profile: deletionResult.profile_deleted,
+        screenshots: result.screenshots_deleted,
+        monthly_usage: result.monthly_usage_deleted,
+        auth_events: result.auth_events_deleted,
+        profile: result.profile_deleted,
         storage_files: storagePaths.length,
       });
     } catch (error: any) {

@@ -3,6 +3,10 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp"
+    },
+    "postman": {
+      "type": "http",
+      "url": "https://mcp.postman.com/minimal"
     }
   }
 }

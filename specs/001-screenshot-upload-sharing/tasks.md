@@ -229,12 +229,12 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 9
 
-- [ ] T079 [P] [US9] Use context7 to fetch Next.js 15 DELETE method documentation for route handlers, then create DELETE /api/screenshots/[shortId] route in app/api/screenshots/[shortId]/route.ts
-- [ ] T080 [P] [US9] Use context7 to fetch Supabase transaction documentation for atomic bulk operations, then create POST /api/screenshots/bulk-delete route in app/api/screenshots/bulk-delete/route.ts
-- [ ] T081 [US9] Use context7 to fetch Supabase Storage remove() API documentation with batch deletion examples, then implement storage file deletion using Supabase Storage remove() API
-- [ ] T082 [US9] Use Supabase MCP execute_sql to verify update_monthly_usage_on_delete trigger fires correctly, then confirm monthly_usage updates on deletion via existing trigger
-- [ ] T083 [US9] Use Supabase MCP execute_sql to batch insert 50 test screenshots, then test bulk delete with 50 screenshots and verify all removed
-- [ ] T084 [US9] Use Supabase MCP execute_sql to verify storage_bytes in monthly_usage decreases correctly after bulk deletion
+- [X] T079 [P] [US9] Use context7 to fetch Next.js 15 DELETE method documentation for route handlers, then create DELETE /api/screenshots/[shortId] route in app/api/screenshots/[shortId]/route.ts
+- [X] T080 [P] [US9] Use context7 to fetch Supabase transaction documentation for atomic bulk operations, then create POST /api/screenshots/bulk-delete route in app/api/screenshots/bulk-delete/route.ts
+- [X] T081 [US9] Use context7 to fetch Supabase Storage remove() API documentation with batch deletion examples, then implement storage file deletion using Supabase Storage remove() API
+- [X] T082 [US9] Use Supabase MCP execute_sql to verify update_monthly_usage_on_delete trigger fires correctly, then confirm monthly_usage updates on deletion via existing trigger
+- [X] T083 [US9] Use Supabase MCP execute_sql to batch insert 20 test screenshots, then test bulk delete with 20 screenshots and verify all removed
+- [X] T084 [US9] Use Supabase MCP execute_sql to verify storage_bytes in monthly_usage decreases correctly after bulk deletion
 
 **Checkpoint**: Large screenshot libraries easily manageable
 

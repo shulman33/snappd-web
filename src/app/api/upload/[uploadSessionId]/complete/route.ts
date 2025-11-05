@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { encodeBase62 } from '@/lib/uploads/encoding'
+import { hashPassword, validatePasswordStrength } from '@/lib/uploads/security'
 
 interface RouteContext {
   params: Promise<{ uploadSessionId: string }>
@@ -173,9 +174,24 @@ export async function POST(
         )
       }
 
-      // Import bcrypt dynamically (only when needed)
-      const bcrypt = await import('bcryptjs')
-      passwordHash = await bcrypt.hash(password, 10)
+      // Validate password strength
+      const passwordValidation = validatePasswordStrength(password)
+      if (!passwordValidation.isValid) {
+        return NextResponse.json(
+          { error: passwordValidation.error },
+          { status: 400 }
+        )
+      }
+
+      // Hash password using our security module
+      try {
+        passwordHash = await hashPassword(password)
+      } catch (error) {
+        return NextResponse.json(
+          { error: 'Failed to secure password. Please try again.' },
+          { status: 500 }
+        )
+      }
     }
 
     // Generate storage path (update from temp path)

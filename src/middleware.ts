@@ -25,7 +25,24 @@ import type { Database } from '@/types/supabase';
 /**
  * Protected routes that require authentication
  */
-const protectedRoutes = ['/dashboard', '/settings', '/api/screenshots'];
+const protectedRoutes = ['/dashboard', '/settings'];
+
+/**
+ * Protected API routes that require authentication
+ * Note: Some /api/screenshots routes are public (like /access and /verify-password)
+ */
+const protectedApiRoutes = [
+  '/api/screenshots', // Base route for listing user screenshots
+  '/api/user/usage'
+];
+
+/**
+ * Public API routes that should NOT require authentication
+ */
+const publicApiRoutes = [
+  '/api/screenshots/[shortId]/access',
+  '/api/screenshots/[shortId]/verify-password'
+];
 
 /**
  * Public routes that authenticated users should be redirected away from
@@ -62,10 +79,26 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     // =========================================================================
     // Step 2: Protected route checks
     // =========================================================================
+
+    // Check if this is a public API route that should bypass auth
+    const isPublicApiRoute = publicApiRoutes.some((route) => {
+      // Convert Next.js dynamic route pattern to regex
+      const pattern = route.replace(/\[([^\]]+)\]/g, '[^/]+')
+      const regex = new RegExp(`^${pattern}$`)
+      return regex.test(pathname)
+    })
+
+    // Check protected routes
     const isProtectedRoute = protectedRoutes.some((route) =>
       pathname.startsWith(route)
-    );
-    const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+    )
+
+    // Check protected API routes (but exclude public API routes)
+    const isProtectedApiRoute = !isPublicApiRoute && protectedApiRoutes.some((route) =>
+      pathname.startsWith(route)
+    )
+
+    const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route))
 
     // Check if user is authenticated using Supabase's getUser() API
     // This is the recommended approach per Supabase documentation
@@ -88,7 +121,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     const hasSession = !!user;
 
     // Redirect unauthenticated users from protected routes to login
-    if (isProtectedRoute && !hasSession) {
+    if ((isProtectedRoute || isProtectedApiRoute) && !hasSession) {
       const redirectUrl = new URL('/login', request.url);
       // Preserve the original URL for redirect after login
       redirectUrl.searchParams.set('redirect', pathname);

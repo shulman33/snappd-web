@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { checkUploadQuota } from '@/lib/uploads/quota'
 import { generateFilePath, createSignedUploadUrl } from '@/lib/uploads/storage'
+import { hashPassword, validatePasswordStrength } from '@/lib/uploads/security'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -24,11 +25,84 @@ interface SingleUploadRequest {
   filename: string
   fileSize: number
   mimeType: string
+  sharingMode?: 'public' | 'private' | 'password'
+  password?: string
+  expiresIn?: number // Expiration time in seconds (for future use)
 }
 
 // Type definition for batch upload request
 interface BatchUploadRequest {
   files: SingleUploadRequest[]
+}
+
+/**
+ * Validate and process sharing mode settings
+ * Returns password hash if password-protected mode is used
+ */
+async function validateSharingMode(
+  sharingMode?: string,
+  password?: string
+): Promise<{
+  isValid: boolean
+  error?: string
+  passwordHash?: string | null
+  validatedSharingMode: 'public' | 'private' | 'password'
+}> {
+  // Default to public if not specified
+  const mode = sharingMode || 'public'
+
+  // Validate sharing mode value
+  if (!['public', 'private', 'password'].includes(mode)) {
+    return {
+      isValid: false,
+      error: 'Invalid sharing mode. Must be: public, private, or password',
+      validatedSharingMode: 'public'
+    }
+  }
+
+  // If password mode, validate password is provided
+  if (mode === 'password') {
+    if (!password) {
+      return {
+        isValid: false,
+        error: 'Password is required for password-protected sharing mode',
+        validatedSharingMode: mode as 'password'
+      }
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(password)
+    if (!passwordValidation.isValid) {
+      return {
+        isValid: false,
+        error: passwordValidation.error,
+        validatedSharingMode: mode as 'password'
+      }
+    }
+
+    // Hash the password
+    try {
+      const passwordHash = await hashPassword(password)
+      return {
+        isValid: true,
+        passwordHash,
+        validatedSharingMode: mode as 'password'
+      }
+    } catch (error) {
+      return {
+        isValid: false,
+        error: 'Failed to secure password. Please try again.',
+        validatedSharingMode: mode as 'password'
+      }
+    }
+  }
+
+  // For public/private modes, no password needed
+  return {
+    isValid: true,
+    passwordHash: null,
+    validatedSharingMode: mode as 'public' | 'private' | 'password'
+  }
 }
 
 /**
@@ -270,12 +344,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle single upload (backward compatible)
-    const { filename, fileSize: fileSizeRaw, mimeType } = body
+    const { filename, fileSize: fileSizeRaw, mimeType, sharingMode, password } = body
 
     // Validate required fields
     if (!filename || !fileSizeRaw || !mimeType) {
       return NextResponse.json(
         { error: 'Missing required fields: filename, fileSize, mimeType' },
+        { status: 400 }
+      )
+    }
+
+    // Validate sharing mode and password
+    const sharingValidation = await validateSharingMode(sharingMode, password)
+    if (!sharingValidation.isValid) {
+      return NextResponse.json(
+        { error: sharingValidation.error },
         { status: 400 }
       )
     }

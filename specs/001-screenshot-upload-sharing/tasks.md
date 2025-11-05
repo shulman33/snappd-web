@@ -187,16 +187,16 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 7
 
-- [ ] T063 [P] [US7] Use context7 to fetch bcryptjs documentation for password hashing with focus on compare and hash functions
-- [ ] T064 [US7] Use context7 to fetch bcrypt best practices for cost factor selection, then implement password hashing in src/lib/uploads/security.ts using bcrypt (cost factor 10)
-- [ ] T065 [P] [US7] Use Supabase MCP execute_sql to verify password_hash column accepts bcrypt hashed values, then update upload init route to support password parameter for password-protected mode
-- [ ] T066 [US7] Use Supabase MCP execute_sql to test sharing_mode constraint validation, then add sharing mode validation to upload routes (public/private/password)
-- [ ] T067 [US7] Create POST /api/screenshots/[shortId]/verify-password route for password verification
-- [ ] T068 [US7] Use context7 to fetch @upstash/ratelimit documentation for sliding window algorithm, then implement rate limiting on password attempts using @upstash/ratelimit (3 attempts per 5 min)
-- [ ] T069 [US7] Create GET /api/screenshots/[shortId]/access route to check sharing_mode and enforce access control
-- [ ] T070 [US7] Use context7 to fetch @supabase/ssr documentation for getUser authentication, then add authentication check for private mode screenshots
-- [ ] T071 [US7] Use Supabase MCP execute_sql to insert test screenshots with each sharing mode, then test all three modes: public (no auth), private (auth required), password (correct password required)
-- [ ] T072 [US7] Test password rate limiting (3 failed attempts triggers 5-minute lockout)
+- [X] T063 [P] [US7] Use context7 to fetch bcryptjs documentation for password hashing with focus on compare and hash functions
+- [X] T064 [US7] Use context7 to fetch bcrypt best practices for cost factor selection, then implement password hashing in src/lib/uploads/security.ts using bcrypt (cost factor 10)
+- [X] T065 [P] [US7] Use Supabase MCP execute_sql to verify password_hash column accepts bcrypt hashed values, then update upload init route to support password parameter for password-protected mode
+- [X] T066 [US7] Use Supabase MCP execute_sql to test sharing_mode constraint validation, then add sharing mode validation to upload routes (public/private/password)
+- [X] T067 [US7] Create POST /api/screenshots/[shortId]/verify-password route for password verification
+- [X] T068 [US7] Use context7 to fetch @upstash/ratelimit documentation for sliding window algorithm, then implement rate limiting on password attempts using @upstash/ratelimit (3 attempts per 5 min)
+- [X] T069 [US7] Create GET /api/screenshots/[shortId]/access route to check sharing_mode and enforce access control
+- [X] T070 [US7] Use context7 to fetch @supabase/ssr documentation for getUser authentication, then add authentication check for private mode screenshots
+- [X] T071 [US7] Use Supabase MCP execute_sql to insert test screenshots with each sharing mode, then test all three modes: public (no auth), private (auth required), password (correct password required)
+- [X] T072 [US7] Test password rate limiting (3 failed attempts triggers 5-minute lockout)
 
 **Checkpoint**: Secure sharing of sensitive content enabled
 

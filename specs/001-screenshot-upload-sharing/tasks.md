@@ -169,11 +169,11 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 6
 
-- [ ] T058 [P] [US6] Use context7 to fetch Web APIs documentation for image metadata extraction, then update complete upload route to extract image metadata (dimensions, mime type)
-- [ ] T059 [P] [US6] Use context7 to fetch Next.js 15 App Router pagination patterns, then create GET /api/screenshots route in app/api/screenshots/route.ts for listing user screenshots
-- [ ] T060 [US6] Use Supabase MCP execute_sql to test query performance with ORDER BY and LIMIT clauses, then add pagination, sorting (by date, views, size) to screenshots list endpoint
-- [ ] T061 [US6] Add metadata fields to screenshots list API response (dimensions, file_size, views, created_at, mime_type)
-- [ ] T062 [US6] Use Supabase MCP execute_sql to insert test screenshots with varying metadata, then test metadata display across different screenshot sizes and types
+- [X] T058 [P] [US6] Use context7 to fetch Web APIs documentation for image metadata extraction, then update complete upload route to extract image metadata (dimensions, mime type)
+- [X] T059 [P] [US6] Use context7 to fetch Next.js 15 App Router pagination patterns, then create GET /api/screenshots route in app/api/screenshots/route.ts for listing user screenshots
+- [X] T060 [US6] Use Supabase MCP execute_sql to test query performance with ORDER BY and LIMIT clauses, then add pagination, sorting (by date, views, size) to screenshots list endpoint
+- [X] T061 [US6] Add metadata fields to screenshots list API response (dimensions, file_size, views, created_at, mime_type)
+- [X] T062 [US6] Use Supabase MCP execute_sql to insert test screenshots with varying metadata, then test metadata display across different screenshot sizes and types
 
 **Checkpoint**: Users can organize and understand their screenshot library
 

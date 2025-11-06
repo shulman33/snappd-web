@@ -182,6 +182,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const MAX_BULK_OPERATIONS = 100;
+
+    if (screenshotIds.length > MAX_BULK_OPERATIONS) {
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.BAD_REQUEST,
+        `Cannot process more than ${MAX_BULK_OPERATIONS} items at once`
+      );
+    }
+
     // Determine which screenshots were successfully deleted vs failed
     const deletedShortIds = screenshots.map((s) => s.short_id)
     const failedShortIds = shortIds.filter((id) => !deletedShortIds.includes(id))

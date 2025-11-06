@@ -15,6 +15,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 import { screenshotAccessLimiter, getRateLimitHeaders } from '@/lib/auth/rate-limit'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
 
 interface RouteContext {
   params: Promise<{ shortId: string }>
@@ -198,24 +199,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
       default:
         // Unknown sharing mode (should never happen with DB constraints)
         console.error(`Unknown sharing mode: ${screenshot.sharing_mode}`)
-        return NextResponse.json(
-          {
-            accessible: false,
-            error: 'Invalid screenshot configuration',
-            sharingMode: null
-          },
-          { status: 500 }
+        return ApiErrorHandler.internal(
+          ApiErrorCode.INTERNAL_ERROR,
+          'Invalid screenshot configuration'
         )
     }
   } catch (error) {
     console.error('Error in /api/screenshots/[shortId]/access:', error)
-    return NextResponse.json(
-      {
-        accessible: false,
-        error: 'Internal server error. Please try again later.',
-        sharingMode: null
-      },
-      { status: 500 }
-    )
+    return ApiErrorHandler.handle(error)
   }
 }

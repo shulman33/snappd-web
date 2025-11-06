@@ -17,6 +17,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
+import { ApiResponse } from '@/lib/api/response'
 
 interface RouteContext {
   params: Promise<{ shortId: string }>
@@ -34,12 +36,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Authentication required. Please sign in to delete screenshots.'
-        },
-        { status: 401 }
+      return ApiErrorHandler.unauthorized(
+        ApiErrorCode.UNAUTHORIZED,
+        'Authentication required. Please sign in to delete screenshots.'
       )
     }
 
@@ -51,23 +50,17 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       .single()
 
     if (fetchError || !screenshot) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Screenshot not found or you do not have permission to delete it'
-        },
-        { status: 404 }
+      return ApiErrorHandler.notFound(
+        ApiErrorCode.SCREENSHOT_NOT_FOUND,
+        'Screenshot not found or you do not have permission to delete it'
       )
     }
 
     // Extra ownership check (should be redundant with RLS, but adds safety)
     if (screenshot.user_id !== user.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'You do not have permission to delete this screenshot'
-        },
-        { status: 403 }
+      return ApiErrorHandler.forbidden(
+        ApiErrorCode.SCREENSHOT_ACCESS_DENIED,
+        'You do not have permission to delete this screenshot'
       )
     }
 
@@ -98,34 +91,24 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         `Failed to delete screenshot ${shortId} from database:`,
         deleteError
       )
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to delete screenshot. Please try again later.'
-        },
-        { status: 500 }
+      return ApiErrorHandler.internal(
+        ApiErrorCode.SCREENSHOT_DELETE_FAILED,
+        'Failed to delete screenshot. Please try again later.',
+        deleteError.message
       )
     }
 
-    return NextResponse.json(
+    return ApiResponse.success(
       {
-        success: true,
-        message: 'Screenshot deleted successfully',
         deletedScreenshot: {
           shortId: screenshot.short_id,
           fileSize: screenshot.file_size
         }
       },
-      { status: 200 }
+      'Screenshot deleted successfully'
     )
   } catch (error) {
     console.error('Error in DELETE /api/screenshots/[shortId]:', error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error. Please try again later.'
-      },
-      { status: 500 }
-    )
+    return ApiErrorHandler.handle(error)
   }
 }

@@ -202,6 +202,146 @@ This is a screenshot sharing application with:
 - PostgreSQL via Supabase (existing instance: iitxfjhnywekstxagump) (005-auth-system)
 - SendGrid for email delivery (@sendgrid/mail)
 
+## API Error Handling
+
+### Unified Error Response System
+
+Snappd uses a comprehensive, standardized error handling system across all API routes for consistent error responses and better developer experience.
+
+**Location**: [src/lib/api/errors.ts](src/lib/api/errors.ts), [src/lib/api/response.ts](src/lib/api/response.ts)
+
+#### Error Response Format
+
+All API errors follow this standardized structure:
+
+```typescript
+{
+  error: string,              // Machine-readable error code (enum-based)
+  message: string,            // User-friendly error message
+  statusCode: number,         // HTTP status code
+
+  // Optional contextual fields:
+  details?: unknown,          // Additional context (dev mode only)
+  field?: string,             // For validation errors
+  retryable?: boolean,        // Can the client retry?
+  retryAfter?: number,        // Seconds to wait (for rate limits)
+  quota?: QuotaInfo,          // Quota information
+  upgrade?: UpgradeInfo,      // Upgrade prompts for quota errors
+  bulkResult?: BulkResult     // Bulk operation partial failures
+}
+```
+
+#### Error Codes
+
+Comprehensive error code enum covering all domains:
+
+**Auth Errors** (from `AuthErrorCode`):
+- `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `EMAIL_NOT_VERIFIED`
+- `ACCOUNT_LOCKED`, `SESSION_EXPIRED`, `VALIDATION_ERROR`
+- `INVALID_TOKEN`, `TOKEN_EXPIRED`, `RATE_LIMIT_EXCEEDED`
+
+**Screenshot Errors**:
+- `SCREENSHOT_NOT_FOUND`, `SCREENSHOT_EXPIRED`, `SCREENSHOT_ACCESS_DENIED`
+- `SCREENSHOT_INVALID_PASSWORD`, `SCREENSHOT_DELETE_FAILED`
+
+**Upload Errors**:
+- `UPLOAD_SESSION_NOT_FOUND`, `UPLOAD_SESSION_EXPIRED`, `UPLOAD_FAILED`
+- `UPLOAD_FILE_TOO_LARGE`, `UPLOAD_INVALID_FILE_TYPE`, `UPLOAD_DUPLICATE_DETECTED`
+
+**Quota Errors**:
+- `QUOTA_EXCEEDED`, `STORAGE_LIMIT_EXCEEDED`, `BANDWIDTH_LIMIT_EXCEEDED`
+- `MONTHLY_UPLOAD_LIMIT_EXCEEDED`
+
+**Storage Errors**:
+- `STORAGE_ERROR`, `STORAGE_UPLOAD_FAILED`, `STORAGE_DELETE_FAILED`
+
+**Database Errors**:
+- `DATABASE_ERROR`, `DATABASE_CONNECTION_ERROR`, `DATABASE_QUERY_ERROR`
+
+**Generic Errors**:
+- `INTERNAL_ERROR`, `NOT_FOUND`, `FORBIDDEN`, `BAD_REQUEST`
+
+#### Usage Examples
+
+```typescript
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
+import { ApiResponse } from '@/lib/api/response'
+
+// Return standardized errors:
+return ApiErrorHandler.unauthorized(
+  ApiErrorCode.UNAUTHORIZED,
+  'Authentication required'
+)
+
+return ApiErrorHandler.notFound(
+  ApiErrorCode.SCREENSHOT_NOT_FOUND,
+  'Screenshot not found'
+)
+
+return ApiErrorHandler.quotaExceeded(
+  ApiErrorCode.MONTHLY_UPLOAD_LIMIT_EXCEEDED,
+  'Monthly upload quota exceeded',
+  { current: 100, limit: 100, unit: 'uploads' },
+  { message: 'Upgrade to Pro', plan: 'pro', url: '/pricing' }
+)
+
+// Return standardized success responses:
+return ApiResponse.success({ userId: '123' }, 'User created')
+return ApiResponse.created({ id: 'abc' }, 'Screenshot uploaded')
+return ApiResponse.paginated(items, { page: 1, pageSize: 20, total: 50 })
+```
+
+#### HTTP Status Codes
+
+Consistent status code mappings:
+- **200**: Success
+- **201**: Resource created
+- **204**: No content (successful deletion)
+- **207**: Multi-Status (bulk operations with partial failures)
+- **400**: Bad request / validation error
+- **401**: Unauthorized / not authenticated
+- **403**: Forbidden / permission denied / quota exceeded
+- **404**: Not found
+- **410**: Gone (expired resource)
+- **413**: Payload too large
+- **422**: Unprocessable entity
+- **429**: Rate limit exceeded
+- **500**: Internal server error
+
+#### Special Behaviors
+
+**Bulk Operations (207 Multi-Status)**:
+- Routes like `/api/screenshots/bulk-delete` return 207 for partial failures
+- Includes detailed `bulkResult` with success/failure breakdown
+- Complete success returns 200 with standard success response
+
+**Analytics Rate Limiting (200 on rate limit)**:
+- `/api/screenshots/[shortId]/track-view` returns 200 even when rate limited
+- Preserves user experience while preventing analytics spam
+- Fails silently for analytics errors
+
+**Rate Limit Metadata**:
+- Custom `X-RateLimit-*` headers for rate limit info
+- `retryAfter` field in response body (seconds)
+- Password verification includes attempt limits
+
+#### Migration Status
+
+✅ **Migrated Routes**:
+- All `/api/screenshots/*` routes
+- All `/api/upload/*` routes
+- All `/api/screenshots/[shortId]/analytics` routes
+- All `/api/screenshots/[shortId]/track-view` routes
+- All `/api/screenshots/[shortId]/verify-password` routes
+
+✅ **Features**:
+- Standardized error codes and messages
+- Quota errors with upgrade prompts
+- Bulk operation partial failure handling (207 Multi-Status)
+- Rate limit metadata with retry information
+- Environment-aware error details (dev mode only)
+
 ## Recent Changes
 - 005-auth-system: Added TypeScript 5.x with Next.js 15.5.5 (App Router), React 19.1.0
 - Email integration: Added SendGrid email service with SMTP configuration and SDK utilities
+- API error handling: Implemented unified error response system with standardized codes, quota handling, and bulk operation support

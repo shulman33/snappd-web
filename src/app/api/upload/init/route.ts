@@ -17,6 +17,8 @@ import { checkUploadQuota } from '@/lib/uploads/quota'
 import { generateFilePath, createSignedUploadUrl } from '@/lib/uploads/storage'
 import { hashPassword, validatePasswordStrength } from '@/lib/uploads/security'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
+import { ApiResponse } from '@/lib/api/response'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -326,9 +328,9 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized. Please sign in to upload screenshots.' },
-        { status: 401 }
+      return ApiErrorHandler.unauthorized(
+        ApiErrorCode.UNAUTHORIZED,
+        'Authentication required. Please sign in to upload screenshots.'
       )
     }
 
@@ -348,18 +350,18 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!filename || !fileSizeRaw || !mimeType) {
-      return NextResponse.json(
-        { error: 'Missing required fields: filename, fileSize, mimeType' },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.VALIDATION_ERROR,
+        'Missing required fields: filename, fileSize, mimeType'
       )
     }
 
     // Validate sharing mode and password
     const sharingValidation = await validateSharingMode(sharingMode, password)
     if (!sharingValidation.isValid) {
-      return NextResponse.json(
-        { error: sharingValidation.error },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.VALIDATION_ERROR,
+        sharingValidation.error || 'Invalid sharing mode configuration'
       )
     }
 
@@ -368,12 +370,14 @@ export async function POST(request: NextRequest) {
 
     // Validate file size
     if (fileSize > MAX_FILE_SIZE) {
-      return NextResponse.json(
+      return ApiErrorHandler.payloadTooLarge(
+        ApiErrorCode.UPLOAD_FILE_TOO_LARGE,
+        `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
         {
-          error: `File size exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
-          maxSize: MAX_FILE_SIZE
-        },
-        { status: 413 }
+          current: fileSize,
+          limit: MAX_FILE_SIZE,
+          unit: 'bytes'
+        }
       )
     }
 
@@ -387,12 +391,9 @@ export async function POST(request: NextRequest) {
     ]
 
     if (!allowedMimeTypes.includes(mimeType)) {
-      return NextResponse.json(
-        {
-          error: 'Invalid file type. Allowed types: PNG, JPEG, WEBP, GIF',
-          allowedTypes: allowedMimeTypes
-        },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.UPLOAD_INVALID_FILE_TYPE,
+        'Invalid file type. Allowed types: PNG, JPEG, WEBP, GIF'
       )
     }
 
@@ -400,21 +401,19 @@ export async function POST(request: NextRequest) {
     const quotaCheck = await checkUploadQuota(user.id)
 
     if (!quotaCheck.canUpload) {
-      return NextResponse.json(
+      return ApiErrorHandler.quotaExceeded(
+        ApiErrorCode.MONTHLY_UPLOAD_LIMIT_EXCEEDED,
+        'Monthly upload quota exceeded',
         {
-          error: 'Monthly upload quota exceeded',
-          quota: {
-            plan: quotaCheck.plan,
-            limit: quotaCheck.limit,
-            used: quotaCheck.used,
-            remaining: 0
-          },
-          upgrade: {
-            message: 'Upgrade to Pro for unlimited uploads',
-            url: '/pricing'
-          }
+          current: quotaCheck.used,
+          limit: quotaCheck.limit,
+          unit: 'uploads'
         },
-        { status: 403 }
+        {
+          message: 'Upgrade to Pro for unlimited uploads',
+          plan: 'pro',
+          url: '/pricing'
+        }
       )
     }
 

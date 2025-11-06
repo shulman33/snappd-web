@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import type { AnalyticsResponse, DailyStat, CountryStats } from '@/types/analytics';
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
 
 export async function GET(
   request: NextRequest,
@@ -28,9 +29,9 @@ export async function GET(
       .single();
 
     if (screenshotError || !screenshot) {
-      return NextResponse.json(
-        { error: 'NOT_FOUND', message: 'Screenshot not found' },
-        { status: 404 }
+      return ApiErrorHandler.notFound(
+        ApiErrorCode.SCREENSHOT_NOT_FOUND,
+        'Screenshot not found'
       );
     }
 
@@ -40,9 +41,9 @@ export async function GET(
 
     // Only owners can view analytics
     if (!isOwner) {
-      return NextResponse.json(
-        { error: 'FORBIDDEN', message: 'Only screenshot owners can view analytics' },
-        { status: 403 }
+      return ApiErrorHandler.forbidden(
+        ApiErrorCode.SCREENSHOT_ACCESS_DENIED,
+        'Only screenshot owners can view analytics'
       );
     }
 

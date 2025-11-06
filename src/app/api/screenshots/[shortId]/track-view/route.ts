@@ -10,6 +10,7 @@ import { createServiceClient } from '@/lib/supabase/service';
 import { getClientIP, hashIP, hashUserAgent, isBot, getCountryFromRequest } from '@/lib/analytics/tracking';
 import type { TrackViewResponse } from '@/types/analytics';
 import { analyticsLimiter } from '@/lib/auth/rate-limit';
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
 
 export async function POST(
   request: NextRequest,
@@ -41,9 +42,9 @@ export async function POST(
       .single();
 
     if (screenshotError || !screenshot) {
-      return NextResponse.json(
-        { error: 'NOT_FOUND', message: 'Screenshot not found' },
-        { status: 404 }
+      return ApiErrorHandler.notFound(
+        ApiErrorCode.SCREENSHOT_NOT_FOUND,
+        'Screenshot not found'
       );
     }
 

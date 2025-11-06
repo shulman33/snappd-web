@@ -15,6 +15,7 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
 
 // Create rate limiter for password attempts
 // 3 attempts per 5 minutes using sliding window, per screenshot
@@ -39,24 +40,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!success) {
       const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-
-      return NextResponse.json(
-        {
-          error: 'Too many password attempts. Please try again later.',
-          retryAfter,
-          limit,
-          remaining: 0
-        },
-        {
-          status: 429,
-          headers: {
-            'X-RateLimit-Limit': limit.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': new Date(reset).toISOString(),
-            'Retry-After': retryAfter.toString()
-          }
-        }
+      const response = ApiErrorHandler.rateLimitExceeded(
+        'Too many password attempts. Please try again later.',
+        retryAfter
       )
+
+      // Add custom rate limit headers
+      response.headers.set('X-RateLimit-Limit', limit.toString())
+      response.headers.set('X-RateLimit-Remaining', '0')
+      response.headers.set('X-RateLimit-Reset', new Date(reset).toISOString())
+      response.headers.set('Retry-After', retryAfter.toString())
+
+      return response
     }
 
     // Parse request body
@@ -65,9 +60,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Validate required fields
     if (!password || typeof password !== 'string') {
-      return NextResponse.json(
-        { error: 'Password is required' },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.VALIDATION_ERROR,
+        'Password is required'
       )
     }
 
@@ -91,9 +86,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .single()
 
     if (screenshotError || !screenshot) {
-      return NextResponse.json(
-        { error: 'Screenshot not found' },
-        { status: 404 }
+      return ApiErrorHandler.notFound(
+        ApiErrorCode.SCREENSHOT_NOT_FOUND,
+        'Screenshot not found'
       )
     }
 

@@ -33,6 +33,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { bulkOperationLimiter, getRateLimitHeaders } from '@/lib/auth/rate-limit'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
+import { ApiResponse } from '@/lib/api/response'
 
 interface BulkDeleteRequest {
   shortIds: string[]
@@ -54,12 +56,9 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Authentication required. Please sign in to delete screenshots.'
-        },
-        { status: 401 }
+      return ApiErrorHandler.unauthorized(
+        ApiErrorCode.UNAUTHORIZED,
+        'Authentication required. Please sign in to delete screenshots.'
       )
     }
 
@@ -68,13 +67,15 @@ export async function POST(request: NextRequest) {
     const headers = getRateLimitHeaders({ success: rateLimitSuccess, pending, ...rateLimitInfo })
 
     if (!rateLimitSuccess) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Too many bulk operations. Please try again later.'
-        },
-        { status: 429, headers }
+      const response = ApiErrorHandler.rateLimitExceeded(
+        'Too many bulk operations. Please try again later.',
+        rateLimitInfo.reset ? Math.ceil((rateLimitInfo.reset - Date.now()) / 1000) : undefined
       )
+      // Add rate limit headers to response
+      Object.entries(headers).forEach(([key, value]) => {
+        response.headers.set(key, value)
+      })
+      return response
     }
 
     // Parse request body
@@ -83,23 +84,17 @@ export async function POST(request: NextRequest) {
 
     // Validate input
     if (!Array.isArray(shortIds) || shortIds.length === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid request. Please provide an array of shortIds.'
-        },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.VALIDATION_ERROR,
+        'Invalid request. Please provide an array of shortIds.'
       )
     }
 
     // Limit batch size to prevent abuse
     if (shortIds.length > 100) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Batch size limit exceeded. Maximum 100 screenshots per request.'
-        },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.VALIDATION_ERROR,
+        'Batch size limit exceeded. Maximum 100 screenshots per request.'
       )
     }
 
@@ -112,29 +107,27 @@ export async function POST(request: NextRequest) {
 
     if (fetchError) {
       console.error('Error fetching screenshots for bulk delete:', fetchError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to fetch screenshots. Please try again later.'
-        },
-        { status: 500 }
+      return ApiErrorHandler.internal(
+        ApiErrorCode.DATABASE_ERROR,
+        'Failed to fetch screenshots. Please try again later.',
+        fetchError.message
       )
     }
 
     // If no screenshots found, all provided IDs are invalid or not owned by user
     if (!screenshots || screenshots.length === 0) {
-      return NextResponse.json(
+      return ApiErrorHandler.bulkPartialFailure(
+        'No screenshots found or you do not have permission to delete them',
         {
-          success: false,
-          deleted: [],
-          failed: shortIds.map((shortId) => ({
-            shortId,
-            error: 'Screenshot not found or you do not have permission to delete it'
-          })),
-          totalDeleted: 0,
-          totalFailed: shortIds.length
-        },
-        { status: 404 }
+          totalRequested: shortIds.length,
+          successCount: 0,
+          failedCount: shortIds.length,
+          failures: shortIds.map((shortId) => ({
+            id: shortId,
+            error: ApiErrorCode.SCREENSHOT_NOT_FOUND,
+            message: 'Screenshot not found or you do not have permission to delete it'
+          }))
+        }
       )
     }
 
@@ -148,12 +141,9 @@ export async function POST(request: NextRequest) {
         `User ${user.id} attempted to delete unauthorized screenshots:`,
         unauthorizedScreenshots.map((s) => s.short_id)
       )
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'You do not have permission to delete one or more screenshots'
-        },
-        { status: 403 }
+      return ApiErrorHandler.forbidden(
+        ApiErrorCode.SCREENSHOT_ACCESS_DENIED,
+        'You do not have permission to delete one or more screenshots'
       )
     }
 
@@ -185,12 +175,10 @@ export async function POST(request: NextRequest) {
 
     if (deleteError) {
       console.error('Failed to delete screenshots from database:', deleteError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to delete screenshots. Please try again later.'
-        },
-        { status: 500 }
+      return ApiErrorHandler.internal(
+        ApiErrorCode.SCREENSHOT_DELETE_FAILED,
+        'Failed to delete screenshots. Please try again later.',
+        deleteError.message
       )
     }
 
@@ -198,36 +186,37 @@ export async function POST(request: NextRequest) {
     const deletedShortIds = screenshots.map((s) => s.short_id)
     const failedShortIds = shortIds.filter((id) => !deletedShortIds.includes(id))
 
-    const failed: DeleteResult[] = failedShortIds.map((shortId) => ({
-      shortId,
-      error: 'Screenshot not found or you do not have permission to delete it'
-    }))
-
     // Calculate total file size deleted
     const totalSizeDeleted = screenshots.reduce(
       (sum, s) => sum + (s.file_size || 0),
       0
     )
 
-    return NextResponse.json(
-      {
-        success: true,
-        deleted: deletedShortIds,
-        failed,
-        totalDeleted: deletedShortIds.length,
-        totalFailed: failed.length,
-        totalSizeDeleted
-      },
-      { status: 200 }
+    // If there are failures, return 207 Multi-Status
+    if (failedShortIds.length > 0) {
+      return ApiErrorHandler.bulkPartialFailure(
+        `Bulk delete completed with ${deletedShortIds.length} successes and ${failedShortIds.length} failures`,
+        {
+          totalRequested: shortIds.length,
+          successCount: deletedShortIds.length,
+          failedCount: failedShortIds.length,
+          failures: failedShortIds.map((shortId) => ({
+            id: shortId,
+            error: ApiErrorCode.SCREENSHOT_NOT_FOUND,
+            message: 'Screenshot not found or you do not have permission to delete it'
+          }))
+        }
+      )
+    }
+
+    // All successful - return 200 OK with bulk success response
+    return ApiResponse.bulkSuccess(
+      shortIds.length,
+      deletedShortIds.length,
+      `Successfully deleted ${deletedShortIds.length} screenshot(s)`
     )
   } catch (error) {
     console.error('Error in POST /api/screenshots/bulk-delete:', error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error. Please try again later.'
-      },
-      { status: 500 }
-    )
+    return ApiErrorHandler.handle(error)
   }
 }

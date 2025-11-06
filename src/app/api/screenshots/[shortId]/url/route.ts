@@ -20,6 +20,7 @@ import {
   getOptimizedUrl,
   getThumbnailUrl
 } from '@/lib/uploads/storage'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
 
 interface RouteParams {
   params: Promise<{
@@ -36,12 +37,9 @@ export async function GET(
 
     // Validate shortId format
     if (!shortId || shortId.length < 6) {
-      return NextResponse.json(
-        {
-          error: 'Invalid screenshot ID',
-          message: 'Screenshot ID must be at least 6 characters'
-        },
-        { status: 400 }
+      return ApiErrorHandler.badRequest(
+        ApiErrorCode.VALIDATION_ERROR,
+        'Screenshot ID must be at least 6 characters'
       )
     }
 
@@ -55,12 +53,9 @@ export async function GET(
       .single()
 
     if (error || !screenshot) {
-      return NextResponse.json(
-        {
-          error: 'Screenshot not found',
-          message: 'The requested screenshot does not exist or has been deleted'
-        },
-        { status: 404 }
+      return ApiErrorHandler.notFound(
+        ApiErrorCode.SCREENSHOT_NOT_FOUND,
+        'The requested screenshot does not exist or has been deleted'
       )
     }
 
@@ -69,12 +64,9 @@ export async function GET(
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user || user.id !== screenshot.user_id) {
-        return NextResponse.json(
-          {
-            error: 'Access denied',
-            message: 'This screenshot is private'
-          },
-          { status: 403 }
+        return ApiErrorHandler.forbidden(
+          ApiErrorCode.SCREENSHOT_ACCESS_DENIED,
+          'This screenshot is private'
         )
       }
     }
@@ -105,12 +97,6 @@ export async function GET(
     )
   } catch (error) {
     console.error('Error fetching screenshot URLs:', error)
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        message: 'Failed to fetch screenshot URLs'
-      },
-      { status: 500 }
-    )
+    return ApiErrorHandler.handle(error)
   }
 }

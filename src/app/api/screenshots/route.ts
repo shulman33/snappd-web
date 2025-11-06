@@ -18,6 +18,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
+import { ApiResponse } from '@/lib/api/response'
 
 const VALID_SORT_FIELDS = ['created_at', 'views', 'file_size'] as const
 const VALID_ORDERS = ['asc', 'desc'] as const
@@ -38,9 +40,9 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized. Please sign in.' },
-        { status: 401 }
+      return ApiErrorHandler.unauthorized(
+        ApiErrorCode.UNAUTHORIZED,
+        'Authentication required. Please sign in.'
       )
     }
 
@@ -91,9 +93,10 @@ export async function GET(request: NextRequest) {
 
     if (screenshotsError) {
       console.error('Error fetching screenshots:', screenshotsError)
-      return NextResponse.json(
-        { error: 'Failed to fetch screenshots' },
-        { status: 500 }
+      return ApiErrorHandler.internal(
+        ApiErrorCode.DATABASE_ERROR,
+        'Failed to fetch screenshots',
+        screenshotsError.message
       )
     }
 
@@ -149,9 +152,6 @@ export async function GET(request: NextRequest) {
     )
   } catch (error) {
     console.error('Error in /api/screenshots:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return ApiErrorHandler.handle(error)
   }
 }

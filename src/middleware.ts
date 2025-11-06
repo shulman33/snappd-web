@@ -30,19 +30,19 @@ const protectedRoutes = ['/dashboard', '/settings'];
 
 /**
  * Protected API routes that require authentication
- * Note: Some /api/screenshots routes are public (like /access and /verify-password)
+ * Note: Some /api/v1/screenshots routes are public (like /access and /verify-password)
  */
 const protectedApiRoutes = [
-  '/api/screenshots', // Base route for listing user screenshots
-  '/api/user/usage'
+  '/api/v1/screenshots', // Base route for listing user screenshots
+  '/api/v1/user/usage'
 ];
 
 /**
  * Public API routes that should NOT require authentication
  */
 const publicApiRoutes = [
-  '/api/screenshots/[shortId]/access',
-  '/api/screenshots/[shortId]/verify-password'
+  '/api/v1/screenshots/[shortId]/access',
+  '/api/v1/screenshots/[shortId]/verify-password'
 ];
 
 /**
@@ -170,13 +170,13 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     }
 
     // If not an auth route, continue with the supabase response
-    if (!pathname.startsWith('/api/auth/')) {
+    if (!pathname.startsWith('/api/v1/auth/')) {
       return supabaseResponse;
     }
   }
 
-  // Apply rate limiting to all /api/auth/* routes
-  if (pathname.startsWith('/api/auth/')) {
+  // Apply rate limiting to all /api/v1/auth/* routes
+  if (pathname.startsWith('/api/v1/auth/')) {
     // Extract IP address (prioritize X-Forwarded-For header for proxied requests)
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -315,7 +315,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
  * Matcher specifies which routes this middleware should run on.
  * We apply it to:
  * 1. All routes for session management and protected route checks
- * 2. /api/auth/* routes for rate limiting
+ * 2. /api/v1/auth/* routes for rate limiting
  *
  * Note: We exclude static files, images, and Next.js internal routes
  * for performance optimization.

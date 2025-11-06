@@ -202,6 +202,66 @@ This is a screenshot sharing application with:
 - PostgreSQL via Supabase (existing instance: iitxfjhnywekstxagump) (005-auth-system)
 - SendGrid for email delivery (@sendgrid/mail)
 
+## API Versioning
+
+### URL-Based Versioning Strategy
+
+Snappd uses URL-based API versioning with the `/api/v1/*` prefix for all endpoints. This approach provides:
+
+- **Client Compatibility**: External clients (Chrome extension, SPA) can safely consume versioned endpoints
+- **Clear Communication**: Version is explicit and visible in URLs
+- **Future-Proof**: Breaking changes can be introduced in v2 without disrupting existing clients
+- **Next.js Native**: Leverages App Router's file-system routing naturally
+
+### Current API Version: v1
+
+All API endpoints are currently accessible at `/api/v1/*`:
+
+**Authentication** (11 routes):
+- `POST /api/v1/auth/signup` - User registration
+- `POST /api/v1/auth/signin` - Email/password authentication
+- `POST /api/v1/auth/signout` - Session termination
+- `GET /api/v1/auth/callback/google` - OAuth callback
+- `POST /api/v1/auth/magic-link` - Passwordless authentication
+- `GET /api/v1/auth/magic-link/callback` - Magic link verification
+- `POST /api/v1/auth/reset-password` - Password reset request
+- `POST /api/v1/auth/reset-password/confirm` - Password reset completion
+- `GET /api/v1/auth/verify-email` - Email verification
+- `POST /api/v1/auth/verify-email/resend` - Resend verification
+- `GET /api/v1/auth/user` - Get current user profile
+- `DELETE /api/v1/auth/account` - Account deletion
+
+**User & Quotas** (1 route):
+- `GET /api/v1/auth/user/usage` - Monthly usage stats
+
+**Upload** (3 routes):
+- `POST /api/v1/upload/init` - Initialize upload session
+- `GET /api/v1/upload/[uploadSessionId]/progress` - Progress tracking
+- `POST /api/v1/upload/[uploadSessionId]/complete` - Complete upload
+
+**Screenshots** (9 routes):
+- `GET /api/v1/screenshots` - List user screenshots
+- `DELETE /api/v1/screenshots/[shortId]` - Delete screenshot
+- `POST /api/v1/screenshots/bulk-delete` - Bulk deletion
+- `GET /api/v1/screenshots/[shortId]/access` - Public access (no auth)
+- `POST /api/v1/screenshots/[shortId]/verify-password` - Password verification
+- `GET /api/v1/screenshots/[shortId]/url` - Get signed URL
+- `GET /api/v1/screenshots/[shortId]/analytics` - View tracking data
+- `POST /api/v1/screenshots/[shortId]/track-view` - Record view event
+
+**Total**: 24 versioned API routes
+
+### Versioning Policy
+
+- **Major Versions** (v1 → v2): Breaking changes (response structure, authentication method, error codes)
+- **Minor Updates** (within v1): Backward-compatible additions (new endpoints, optional fields)
+- **Support Window**: 2 concurrent major versions (e.g., v1 and v2)
+- **Deprecation Timeline**: 6-month notice before version sunset
+
+### Migration Notes
+
+All routes were migrated from unversioned `/api/*` to `/api/v1/*` structure on 2025-11-05. Since the API was pre-production, no backward compatibility layer was maintained.
+
 ## API Error Handling
 
 ### Unified Error Response System
@@ -311,12 +371,12 @@ Consistent status code mappings:
 #### Special Behaviors
 
 **Bulk Operations (207 Multi-Status)**:
-- Routes like `/api/screenshots/bulk-delete` return 207 for partial failures
+- Routes like `/api/v1/screenshots/bulk-delete` return 207 for partial failures
 - Includes detailed `bulkResult` with success/failure breakdown
 - Complete success returns 200 with standard success response
 
 **Analytics Rate Limiting (200 on rate limit)**:
-- `/api/screenshots/[shortId]/track-view` returns 200 even when rate limited
+- `/api/v1/screenshots/[shortId]/track-view` returns 200 even when rate limited
 - Preserves user experience while preventing analytics spam
 - Fails silently for analytics errors
 
@@ -328,11 +388,10 @@ Consistent status code mappings:
 #### Migration Status
 
 ✅ **Migrated Routes**:
-- All `/api/screenshots/*` routes
-- All `/api/upload/*` routes
-- All `/api/screenshots/[shortId]/analytics` routes
-- All `/api/screenshots/[shortId]/track-view` routes
-- All `/api/screenshots/[shortId]/verify-password` routes
+- All `/api/v1/screenshots/*` routes (9 routes)
+- All `/api/v1/upload/*` routes (3 routes)
+- All `/api/v1/auth/*` routes (11 routes)
+- All `/api/v1/auth/user/usage` route (1 route)
 
 ✅ **Features**:
 - Standardized error codes and messages
@@ -575,12 +634,12 @@ export async function POST(request: NextRequest) {
 - Error handler integration
 
 ✅ **Example Routes**:
-- `/api/upload/init` - Fully migrated with request correlation
+- `/api/v1/upload/init` - Fully migrated with request correlation
 
 🔄 **Remaining Routes** (follow the same pattern):
-- Other upload routes (`/api/upload/[id]/complete`, `/api/upload/[id]/progress`)
-- Screenshot routes (`/api/screenshots/*`)
-- Auth routes (`/api/auth/*`)
+- Other upload routes (`/api/v1/upload/[id]/complete`, `/api/v1/upload/[id]/progress`)
+- Screenshot routes (`/api/v1/screenshots/*`)
+- Auth routes (`/api/v1/auth/*`)
 
 ### Best Practices
 
@@ -595,3 +654,4 @@ export async function POST(request: NextRequest) {
 - Email integration: Added SendGrid email service with SMTP configuration and SDK utilities
 - API error handling: Implemented unified error response system with standardized codes, quota handling, and bulk operation support
 - Request ID tracking: Implemented request ID generation in middleware and centralized logging system with automatic request correlation
+- API versioning: Migrated all 24 API routes to `/api/v1/*` structure with URL-based versioning (2025-11-05)

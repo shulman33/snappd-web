@@ -1,0 +1,619 @@
+openapi: 3.0.3
+info:
+  title: Screenshot Upload and Sharing API
+  version: 1.0.0
+  description: |
+    API for uploading, managing, and sharing screenshots with support for:
+    - Signed URL upload generation
+    - Image optimization and thumbnail generation
+    - Share link generation with access controls
+    - View tracking and analytics
+    - Quota enforcement
+
+servers:
+  - url: https://snappd.io/api
+    description: Production
+  - url: http://localhost:3000/api
+    description: Local development
+
+tags:
+  - name: Upload
+    description: Screenshot upload operations
+  - name: Screenshots
+    description: Screenshot management
+  - name: Sharing
+    description: Share link operations
+  - name: Analytics
+    description: View tracking and statistics
+
+paths:
+  /upload/init:
+    post:
+      tags: [Upload]
+      summary: Initialize upload session
+      description: |
+        Creates a signed upload URL for direct client upload to Supabase Storage.
+        Checks user quota and generates unique file path.
+      operationId: initUpload
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - filename
+                - fileSize
+                - mimeType
+              properties:
+                filename:
+                  type: string
+                  example: "screenshot-2025-11-03.png"
+                  description: Original filename
+                fileSize:
+                  type: integer
+                  example: 5242880
+                  description: File size in bytes (max 10MB)
+                mimeType:
+                  type: string
+                  enum: [image/png, image/jpeg, image/jpg, image/webp, image/gif]
+                  example: "image/png"
+                sharingMode:
+                  type: string
+                  enum: [public, private, password]
+                  default: public
+                  description: Access control mode
+                password:
+                  type: string
+                  description: Required if sharingMode is 'password'
+                  minLength: 8
+                expiresIn:
+                  type: integer
+                  description: Expiration time in seconds (null for permanent)
+                  example: 2592000
+      responses:
+        '200':
+          description: Upload session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadSessionId:
+                    type: string
+                    format: uuid
+                    example: "123e4567-e89b-12d3-a456-426614174000"
+                  signedUrl:
+                    type: string
+                    format: uri
+                    example: "https://xxx.supabase.co/storage/v1/upload/sign/..."
+                  token:
+                    type: string
+                    description: Upload token for signed URL
+                  filePath:
+                    type: string
+                    example: "550e8400-e29b-41d4-a716-446655440000/2025/11/a3f5e8b-1730678400000.png"
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: When signed URL expires
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/QuotaExceeded'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "FILE_TOO_LARGE"
+                message: "File size exceeds 10MB limit"
+
+  /upload/{uploadSessionId}/complete:
+    post:
+      tags: [Upload]
+      summary: Complete upload session
+      description: |
+        Finalizes upload after client completes file transfer.
+        Triggers image optimization and metadata extraction.
+      operationId: completeUpload
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uploadSessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Upload completed and processing started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  screenshotId:
+                    type: string
+                    format: uuid
+                  shortId:
+                    type: string
+                    example: "aB3xYz"
+                  shareUrl:
+                    type: string
+                    format: uri
+                    example: "https://snappd.io/aB3xYz"
+                  status:
+                    type: string
+                    enum: [processing, completed]
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Upload session expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /upload/{uploadSessionId}/progress:
+    get:
+      tags: [Upload]
+      summary: Get upload progress
+      description: Returns current upload and processing status
+      operationId: getUploadProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uploadSessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Upload progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, uploading, processing, completed, failed]
+                  bytesUploaded:
+                    type: integer
+                  totalBytes:
+                    type: integer
+                  percentage:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  error:
+                    type: string
+                    nullable: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /screenshots:
+    get:
+      tags: [Screenshots]
+      summary: List user's screenshots
+      description: Returns paginated list of user's screenshots
+      operationId: listScreenshots
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [created_at, views, file_size]
+            default: created_at
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Screenshot list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  screenshots:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Screenshot'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /screenshots/{shortId}:
+    get:
+      tags: [Screenshots]
+      summary: Get screenshot details
+      description: Returns screenshot metadata and signed URL for viewing
+      operationId: getScreenshot
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "aB3xYz"
+        - name: password
+          in: query
+          schema:
+            type: string
+          description: Required for password-protected screenshots
+      responses:
+        '200':
+          description: Screenshot details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Screenshot'
+                  - type: object
+                    properties:
+                      imageUrl:
+                        type: string
+                        format: uri
+                        description: Signed URL for viewing image
+                      thumbnailUrl:
+                        type: string
+                        format: uri
+        '401':
+          description: Password required or incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "PASSWORD_REQUIRED"
+                message: "This screenshot is password protected"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Screenshot expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "SCREENSHOT_EXPIRED"
+                message: "This screenshot link has expired"
+        '429':
+          description: Too many password attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "RATE_LIMIT_EXCEEDED"
+                message: "Too many failed attempts. Try again in 5 minutes."
+
+    delete:
+      tags: [Screenshots]
+      summary: Delete screenshot
+      description: Permanently deletes screenshot and associated files
+      operationId: deleteScreenshot
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Screenshot deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not authorized to delete this screenshot
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /screenshots/bulk-delete:
+    post:
+      tags: [Screenshots]
+      summary: Bulk delete screenshots
+      description: Deletes multiple screenshots in a single operation
+      operationId: bulkDeleteScreenshots
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shortIds
+              properties:
+                shortIds:
+                  type: array
+                  items:
+                    type: string
+                  example: ["aB3xYz", "xY9zAb"]
+                  maxItems: 100
+      responses:
+        '200':
+          description: Bulk deletion results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    description: Number of screenshots successfully deleted
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        shortId:
+                          type: string
+                        error:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /screenshots/{shortId}/analytics:
+    get:
+      tags: [Analytics]
+      summary: Get screenshot analytics
+      description: Returns view statistics for a screenshot
+      operationId: getScreenshotAnalytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: range
+          in: query
+          schema:
+            type: integer
+            default: 30
+            description: Number of days to include
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalViews:
+                    type: integer
+                    example: 157
+                  uniqueViewers:
+                    type: integer
+                    example: 89
+                  dailyStats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        views:
+                          type: integer
+                  countryStats:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                    example:
+                      US: 45
+                      UK: 23
+                      CA: 15
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not authorized to view analytics
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /share/{shortId}/track:
+    post:
+      tags: [Analytics]
+      summary: Track screenshot view
+      description: Records a view event for analytics (called automatically when screenshot is accessed)
+      operationId: trackView
+      parameters:
+        - name: shortId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: View tracked successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /user/usage:
+    get:
+      tags: [User]
+      summary: Get user quota usage
+      description: Returns current month's usage statistics
+      operationId: getUserUsage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    type: string
+                    enum: [free, pro, team]
+                  currentMonth:
+                    type: string
+                    example: "2025-11"
+                  screenshotCount:
+                    type: integer
+                    example: 7
+                  screenshotLimit:
+                    type: integer
+                    nullable: true
+                    example: 10
+                    description: null for unlimited (pro/team)
+                  storageBytes:
+                    type: integer
+                    example: 52428800
+                  storageLimitBytes:
+                    type: integer
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT token
+
+  schemas:
+    Screenshot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        shortId:
+          type: string
+          example: "aB3xYz"
+        originalFilename:
+          type: string
+          example: "screenshot-2025-11-03.png"
+        fileSize:
+          type: integer
+          description: Size in bytes
+        width:
+          type: integer
+        height:
+          type: integer
+        mimeType:
+          type: string
+        sharingMode:
+          type: string
+          enum: [public, private, password]
+        isPublic:
+          type: boolean
+        views:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error context
+          nullable: true
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "INVALID_REQUEST"
+            message: "Missing required field: filename"
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Authentication token required"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "NOT_FOUND"
+            message: "Screenshot not found"
+
+    QuotaExceeded:
+      description: User quota exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "QUOTA_EXCEEDED"
+            message: "You've reached your monthly limit of 10 screenshots. Upgrade to Pro for unlimited uploads."

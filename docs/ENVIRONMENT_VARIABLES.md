@@ -218,11 +218,104 @@ Configure OAuth providers for social authentication via Supabase Auth.
 
 ---
 
-## Email Service Configuration (Optional)
+## Email Service Configuration
 
-Supabase provides built-in email functionality, but you can use a custom email service provider for better deliverability and customization.
+### SendGrid (Recommended)
 
-### Resend
+Snappd uses SendGrid for transactional email delivery. This provides better deliverability, analytics, and customization compared to default SMTP providers.
+
+#### `SENDGRID_API_KEY`
+**Required**: Yes
+**Where to get it**:
+1. Go to [SendGrid](https://sendgrid.com)
+2. Sign up for a free account (100 emails/day free tier)
+3. Navigate to **Settings** → **API Keys**
+4. Click **Create API Key**
+5. Name: "Snappd Production" (or "Snappd Development")
+6. Permissions: Select **Full Access** (or **Restricted Access** with Mail Send enabled)
+7. Click **Create & View**
+8. Copy the key (starts with `SG.`)
+
+**⚠️ CRITICAL WARNING**:
+- Save this key immediately - you won't be able to see it again
+- **NEVER** expose this key in client-side code
+- **NEVER** commit this to version control
+- Use different API keys for development and production
+
+#### `SENDGRID_FROM_EMAIL`
+**Required**: Yes
+**Default**: `noreply@snappd.app`
+**Where to configure**:
+1. Go to [SendGrid Dashboard](https://app.sendgrid.com)
+2. Navigate to **Settings** → **Sender Authentication**
+3. Choose one of two options:
+
+**Option A: Single Sender Verification (Recommended for development)**
+- Click **Verify a Single Sender**
+- Enter your email address (e.g., `noreply@yourdomain.com`)
+- Fill in sender details (name, address)
+- Click **Create**
+- Check your email and click the verification link
+- Use this verified email address as `SENDGRID_FROM_EMAIL`
+
+**Option B: Domain Authentication (Recommended for production)**
+- Click **Authenticate Your Domain**
+- Enter your domain (e.g., `snappd.app`)
+- Follow DNS configuration steps
+- After verification, you can use any email from that domain
+
+**Example values**:
+- Development: `dev@youremail.com` (single sender)
+- Production: `noreply@snappd.app` (authenticated domain)
+
+#### `SENDGRID_FROM_NAME`
+**Required**: No
+**Default**: `Snappd`
+**Example**: `"Snappd"` or `"Snappd Team"`
+
+This is the sender name that appears in the "From" field of emails.
+
+### Configure Supabase to Use SendGrid SMTP
+
+To route Supabase Auth emails through SendGrid:
+
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project (`iitxfjhnywekstxagump`)
+3. Navigate to **Project Settings** → **Authentication**
+4. Scroll to **SMTP Settings**
+5. Click **Enable Custom SMTP**
+6. Enter the following:
+   - **Host**: `smtp.sendgrid.net`
+   - **Port**: `587`
+   - **Username**: `apikey` (exactly as written)
+   - **Password**: Your SendGrid API Key (the value from `SENDGRID_API_KEY`)
+   - **Sender email**: Same as `SENDGRID_FROM_EMAIL`
+   - **Sender name**: Same as `SENDGRID_FROM_NAME`
+7. Click **Save**
+
+**Testing SMTP Configuration**:
+1. In Supabase Dashboard → **Authentication** → **Email Templates**
+2. Click **Send test email**
+3. Enter your email address
+4. Check if you receive the test email
+5. Verify in SendGrid Dashboard → **Activity** that the email was processed
+
+### SendGrid Email Templates (Optional)
+
+For custom-branded emails, you can create dynamic templates in SendGrid:
+
+1. Go to [SendGrid Dashboard](https://app.sendgrid.com)
+2. Navigate to **Email API** → **Dynamic Templates**
+3. Click **Create a Dynamic Template**
+4. Create templates for:
+   - Email Verification
+   - Password Reset
+   - Magic Link
+   - Welcome Email
+
+Each template gets a Template ID (format: `d-xxxxxxxxxxxxx`). You can reference these IDs in your application code for custom email designs.
+
+### Alternative: Resend (Not Currently Integrated)
 
 **Where to get it**:
 1. Go to [Resend](https://resend.com)
@@ -231,19 +324,7 @@ Supabase provides built-in email functionality, but you can use a custom email s
 4. Click **Create API Key**
 5. Copy the key (starts with `re_`)
 
-**Configure in Supabase**:
-1. Go to Supabase Dashboard → **Authentication** → **Email Templates**
-2. Configure SMTP settings to use Resend
-
-### SendGrid
-
-**Where to get it**:
-1. Go to [SendGrid](https://sendgrid.com)
-2. Sign up or log in
-3. Navigate to **Settings** → **API Keys**
-4. Click **Create API Key**
-5. Select permissions (Full Access or restricted)
-6. Copy the key (starts with `SG.`)
+**Note**: Resend integration is not currently implemented. Use SendGrid instead.
 
 ---
 

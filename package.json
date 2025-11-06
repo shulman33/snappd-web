@@ -6,13 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:openapi": "redocly lint public/openapi.json"
   },
   "dependencies": {
+    "@scalar/nextjs-api-reference": "^0.9.0",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.78.0",
     "@upstash/ratelimit": "^2.0.6",
     "@upstash/redis": "^1.35.6",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "next": "15.5.5",
     "react": "19.1.0",
@@ -22,7 +26,9 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@redocly/cli": "^2.11.0",
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

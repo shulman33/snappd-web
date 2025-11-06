@@ -1,0 +1,485 @@
+{
+  "info": {
+    "name": "Snappd API Collection",
+    "description": "Complete API collection for Snappd screenshot sharing application. Includes authentication, upload, and user management endpoints.",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "User authentication and account management endpoints",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"fullName\": \"John Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            },
+            "description": "Creates a new user account with email/password credentials.\n\n**Request Body:**\n- `email` (string, required): Valid email address\n- `password` (string, required): Min 8 chars, uppercase, lowercase, number, special char\n- `fullName` (string, optional): User's full name\n\n**Success Response (201):**\n```json\n{\n  \"user\": {\n    \"id\": \"uuid\",\n    \"email\": \"user@example.com\",\n    \"emailVerified\": false,\n    \"fullName\": \"John Doe\",\n    \"plan\": \"free\",\n    \"createdAt\": \"2025-11-02T12:00:00Z\"\n  },\n  \"message\": \"Signup successful! Please check your email to verify your account.\"\n}\n```\n\n**Rate Limit:** 5 attempts per 15 minutes"
+          },
+          "response": []
+        },
+        {
+          "name": "Sign In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Extract access token from successful sign-in response",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.session && response.session.accessToken) {",
+                  "        pm.environment.set('accessToken', response.session.accessToken);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signin"
+              ]
+            },
+            "description": "Authenticate a user with email and password.\n\n**Features:**\n- Dual-scope rate limiting (per-account + per-IP)\n- Account lockout after 5 failed attempts (15 min window)\n- IP blocking after 20 failed attempts (15 min window)\n- Email verification check\n- Generic error messages to prevent account enumeration\n\n**Request Body:**\n- `email` (string, required): User's email address\n- `password` (string, required): User's password\n\n**Success Response (200):**\n```json\n{\n  \"user\": {\n    \"id\": \"uuid\",\n    \"email\": \"user@example.com\",\n    \"emailVerified\": true,\n    \"fullName\": \"John Doe\",\n    \"plan\": \"free\",\n    \"createdAt\": \"2025-11-02T12:00:00Z\"\n  },\n  \"session\": {\n    \"expiresAt\": \"2025-11-03T12:00:00Z\"\n  }\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Sign Out",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signout"
+              ]
+            },
+            "description": "Sign out the currently authenticated user.\n\n**Features:**\n- Terminates the current session\n- Clears session cookies (HTTP-only)\n- Works across all devices for the same session\n- Concurrent sessions on other devices remain active\n\n**Success Response (200):**\n```json\n{\n  \"message\": \"Successfully signed out\"\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/user",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "user"
+              ]
+            },
+            "description": "Get the currently authenticated user's data.\n\n**Features:**\n- Returns user profile data for authenticated users\n- Used by browser extension for auth state polling\n- Validates session token with Supabase Auth\n- Returns 401 if not authenticated\n\n**Success Response (200):**\n```json\n{\n  \"user\": {\n    \"id\": \"uuid\",\n    \"email\": \"user@example.com\",\n    \"emailVerified\": true,\n    \"fullName\": \"John Doe\",\n    \"plan\": \"free\",\n    \"createdAt\": \"2025-11-02T12:00:00Z\"\n  }\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Account",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"SecurePass123!\",\n  \"confirmation\": \"DELETE MY ACCOUNT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/account",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "account"
+              ]
+            },
+            "description": "Permanently deletes a user account and all associated data for privacy compliance (GDPR, CCPA).\n\n**Process:**\n1. Validate user session\n2. Verify password (email/password users) OR OAuth re-authentication (OAuth-only users)\n3. Cancel active Stripe subscriptions\n4. Mark Stripe customer as deleted\n5. Delete all user screenshots from storage\n6. Delete user data: profiles, monthly_usage, auth_events\n7. Delete user from auth.users (triggers cascade deletes)\n8. Send confirmation email\n9. Log deletion event\n\n**Request Body:**\n- `password` (string, required): User's password for verification\n- `confirmation` (string, required): Must be exactly \"DELETE MY ACCOUNT\"\n\n**Success Response (200):**\n```json\n{\n  \"message\": \"Account successfully deleted. You will receive a confirmation email shortly.\"\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Email Verification",
+      "description": "Email verification and resend endpoints",
+      "item": [
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email?token_hash={{tokenHash}}&type=email&next=/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email"
+              ],
+              "query": [
+                {
+                  "key": "token_hash",
+                  "value": "{{tokenHash}}",
+                  "description": "Hashed verification token from email link"
+                },
+                {
+                  "key": "type",
+                  "value": "email",
+                  "description": "OTP type (should be 'email' for email verification)"
+                },
+                {
+                  "key": "next",
+                  "value": "/dashboard",
+                  "description": "Redirect URL after successful verification"
+                }
+              ]
+            },
+            "description": "Verifies user email address using token_hash from email link (PKCE flow).\n\nThis endpoint is called when the user clicks the verification link in their email.\n\n**Query Parameters:**\n- `token_hash` (string, required): Hashed verification token from email link\n- `type` (string, required): OTP type (should be 'email' for email verification)\n- `next` (string, optional): Redirect URL after successful verification\n\n**Success Response (302):**\nRedirects to the `next` URL parameter or `/dashboard` by default\n\n**Error Response (302):**\nRedirects to `/auth/error` with error details in query string"
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Verification Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-email/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-email",
+                "resend"
+              ]
+            },
+            "description": "Resends verification email to the specified address.\n\n**Rate Limited:** 3 requests per hour per email\n\n**Request Body:**\n- `email` (string, required): Email address to resend verification to\n\n**Success Response (200):**\n```json\n{\n  \"message\": \"If an unverified account exists with this email, a verification email has been sent.\"\n}\n```\n\n**Note:** Generic message to prevent email enumeration attacks"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Password Reset",
+      "description": "Password reset flow endpoints",
+      "item": [
+        {
+          "name": "Request Password Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Initiates a password reset flow by sending a password reset email to the user.\n\n**Features:**\n- Rate limiting (3 requests per hour)\n- Exponential backoff for email delivery failures\n- Comprehensive auth event logging\n\n**Request Body:**\n- `email` (string, required): User's email address\n\n**Rate limit:** 3 requests per hour per email\n\n**Success Response (200):**\n```json\n{\n  \"message\": \"If an account exists with this email address, you will receive password reset instructions shortly. Please check your inbox and spam folder.\"\n}\n```\n\n**Note:** Generic message to prevent account enumeration attacks"
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Password Reset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset_token_from_email\",\n  \"password\": \"NewSecurePass123!\",\n  \"confirmPassword\": \"NewSecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password",
+                "confirm"
+              ]
+            },
+            "description": "Confirms a password reset by validating the reset token and updating the user's password.\n\n**Features:**\n- Token expiration (1 hour)\n- Single-use enforcement\n- Session invalidation\n\n**Request Body:**\n- `token` (string, required): Password reset token from email link\n- `password` (string, required): New password (min 8 chars, complexity requirements)\n- `confirmPassword` (string, required): Password confirmation (must match)\n\n**Security features:**\n- Invalidates all other user sessions (except current)\n- Logs password_changed event\n- Enforces password complexity requirements\n\n**Success Response (200):**\n```json\n{\n  \"message\": \"Your password has been reset successfully. You can now log in with your new password.\",\n  \"user\": {\n    \"id\": \"uuid\",\n    \"email\": \"user@example.com\"\n  }\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Magic Link",
+      "description": "Passwordless authentication endpoints",
+      "item": [
+        {
+          "name": "Request Magic Link",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/magic-link",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "magic-link"
+              ]
+            },
+            "description": "Sends a magic link to the user's email for passwordless authentication.\n\n**Features:**\n- Rate limiting (5 requests per hour per email)\n- Automatic account creation for new users\n- Exponential backoff for email delivery failures\n- 15-minute link expiration\n\n**Request Body:**\n- `email` (string, required): User's email address\n\n**Success Response (200):**\n```json\n{\n  \"message\": \"Magic link sent successfully. Please check your email.\",\n  \"expiresAt\": \"2025-11-03T12:15:00Z\"\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Screenshot Upload",
+      "description": "Screenshot upload and sharing endpoints",
+      "item": [
+        {
+          "name": "Initialize Upload",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"screenshot.png\",\n  \"fileSize\": 1024000,\n  \"mimeType\": \"image/png\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/init",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "upload",
+                "init"
+              ]
+            },
+            "description": "Initialize a screenshot upload session.\n\n**Features:**\n- Authentication required\n- Quota checking (free users: 10/month, pro users: unlimited)\n- Generates signed upload URL for direct client upload\n- Creates upload session record for progress tracking\n\n**Request Body:**\n- `filename` (string, required): Original filename\n- `fileSize` (number, required): File size in bytes (max 10MB)\n- `mimeType` (string, required): MIME type (image/png, image/jpeg, image/jpg, image/webp, image/gif)\n\n**Success Response (200):**\n```json\n{\n  \"uploadSessionId\": \"uuid\",\n  \"signedUrl\": \"https://...\",\n  \"token\": \"upload_token\",\n  \"storagePath\": \"user_id/2025/11/hash.png\",\n  \"expiresAt\": \"2025-11-03T13:00:00Z\",\n  \"quota\": {\n    \"plan\": \"free\",\n    \"limit\": 10,\n    \"used\": 3,\n    \"remaining\": 7\n  }\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Upload",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileHash\": \"abc123def456\",\n  \"width\": 1920,\n  \"height\": 1080,\n  \"sharingMode\": \"public\",\n  \"password\": null,\n  \"expiresIn\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/upload/{{uploadSessionId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "upload",
+                "{{uploadSessionId}}",
+                "complete"
+              ]
+            },
+            "description": "Complete a screenshot upload after the file has been uploaded to storage.\n\n**Features:**\n- Verify upload session exists and belongs to user\n- Calculate file hash and check for duplicates\n- Generate short ID for sharing\n- Create screenshot record in database\n- Update upload session status\n- Trigger quota enforcement via database trigger\n\n**Request Body:**\n- `fileHash` (string, required): SHA-256 hash of the file\n- `width` (number, required): Image width in pixels\n- `height` (number, required): Image height in pixels\n- `sharingMode` (string, optional): Sharing mode (\"public\", \"unlisted\", \"password\") - default: \"public\"\n- `password` (string, optional): Password for password-protected mode\n- `expiresIn` (number, optional): Expiration time in seconds from now\n\n**Success Response (201):**\n```json\n{\n  \"message\": \"Upload completed successfully\",\n  \"screenshot\": {\n    \"id\": \"uuid\",\n    \"shortId\": \"abc123\",\n    \"shareUrl\": \"https://snappd.app/abc123\",\n    \"storagePath\": \"user_id/2025/11/hash.png\",\n    \"expiresAt\": \"2025-12-03T12:00:00Z\",\n    \"sharingMode\": \"public\",\n    \"width\": 1920,\n    \"height\": 1080,\n    \"fileSize\": 1024000,\n    \"createdAt\": \"2025-11-03T12:00:00Z\"\n  }\n}\n```"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tokenHash",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "uploadSessionId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

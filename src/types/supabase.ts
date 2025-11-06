@@ -47,6 +47,44 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_view_stats: {
+        Row: {
+          country_stats: Json | null
+          created_at: string | null
+          date: string
+          id: string
+          screenshot_id: string
+          unique_viewers: number | null
+          view_count: number | null
+        }
+        Insert: {
+          country_stats?: Json | null
+          created_at?: string | null
+          date: string
+          id?: string
+          screenshot_id: string
+          unique_viewers?: number | null
+          view_count?: number | null
+        }
+        Update: {
+          country_stats?: Json | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          screenshot_id?: string
+          unique_viewers?: number | null
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_view_stats_screenshot_id_fkey"
+            columns: ["screenshot_id"]
+            isOneToOne: false
+            referencedRelation: "screenshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_usage: {
         Row: {
           bandwidth_bytes: number | null
@@ -125,14 +163,21 @@ export type Database = {
         Row: {
           created_at: string | null
           expires_at: string | null
+          file_hash: string
           file_size: number
           height: number
           id: string
           is_public: boolean | null
           mime_type: string | null
+          optimized_path: string | null
           original_filename: string
+          password_hash: string | null
+          processing_error: string | null
+          processing_status: string | null
+          sharing_mode: string
           short_id: string
           storage_path: string
+          thumbnail_path: string | null
           updated_at: string | null
           user_id: string
           views: number | null
@@ -141,14 +186,21 @@ export type Database = {
         Insert: {
           created_at?: string | null
           expires_at?: string | null
+          file_hash?: string
           file_size: number
           height: number
           id?: string
           is_public?: boolean | null
           mime_type?: string | null
+          optimized_path?: string | null
           original_filename: string
+          password_hash?: string | null
+          processing_error?: string | null
+          processing_status?: string | null
+          sharing_mode?: string
           short_id: string
           storage_path: string
+          thumbnail_path?: string | null
           updated_at?: string | null
           user_id: string
           views?: number | null
@@ -157,14 +209,21 @@ export type Database = {
         Update: {
           created_at?: string | null
           expires_at?: string | null
+          file_hash?: string
           file_size?: number
           height?: number
           id?: string
           is_public?: boolean | null
           mime_type?: string | null
+          optimized_path?: string | null
           original_filename?: string
+          password_hash?: string | null
+          processing_error?: string | null
+          processing_status?: string | null
+          sharing_mode?: string
           short_id?: string
           storage_path?: string
+          thumbnail_path?: string | null
           updated_at?: string | null
           user_id?: string
           views?: number | null
@@ -195,21 +254,119 @@ export type Database = {
         }
         Relationships: []
       }
+      upload_sessions: {
+        Row: {
+          bytes_uploaded: number | null
+          created_at: string | null
+          error_message: string | null
+          file_size: number
+          filename: string
+          id: string
+          mime_type: string
+          retry_count: number | null
+          screenshot_id: string | null
+          signed_url: string | null
+          signed_url_expires_at: string | null
+          updated_at: string | null
+          upload_status: string | null
+          user_id: string
+        }
+        Insert: {
+          bytes_uploaded?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          file_size: number
+          filename: string
+          id?: string
+          mime_type: string
+          retry_count?: number | null
+          screenshot_id?: string | null
+          signed_url?: string | null
+          signed_url_expires_at?: string | null
+          updated_at?: string | null
+          upload_status?: string | null
+          user_id: string
+        }
+        Update: {
+          bytes_uploaded?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          file_size?: number
+          filename?: string
+          id?: string
+          mime_type?: string
+          retry_count?: number | null
+          screenshot_id?: string | null
+          signed_url?: string | null
+          signed_url_expires_at?: string | null
+          updated_at?: string | null
+          upload_status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_sessions_screenshot_id_fkey"
+            columns: ["screenshot_id"]
+            isOneToOne: false
+            referencedRelation: "screenshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upload_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      view_events: {
+        Row: {
+          country: string | null
+          id: string
+          ip_hash: string
+          is_authenticated: boolean | null
+          is_owner: boolean | null
+          screenshot_id: string
+          user_agent_hash: string | null
+          viewed_at: string | null
+        }
+        Insert: {
+          country?: string | null
+          id?: string
+          ip_hash: string
+          is_authenticated?: boolean | null
+          is_owner?: boolean | null
+          screenshot_id: string
+          user_agent_hash?: string | null
+          viewed_at?: string | null
+        }
+        Update: {
+          country?: string | null
+          id?: string
+          ip_hash?: string
+          is_authenticated?: boolean | null
+          is_owner?: boolean | null
+          screenshot_id?: string
+          user_agent_hash?: string | null
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "view_events_screenshot_id_fkey"
+            columns: ["screenshot_id"]
+            isOneToOne: false
+            referencedRelation: "screenshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      delete_user_data: {
-        Args: { target_user_id: string }
-        Returns: {
-          screenshots_deleted: number
-          monthly_usage_deleted: number
-          auth_events_deleted: number
-          profile_deleted: number
-          storage_paths: string[]
-        }
-      }
+      delete_user_data: { Args: { target_user_id: string }; Returns: Json }
       verify_user_password: {
         Args: { user_email: string; user_password: string }
         Returns: boolean

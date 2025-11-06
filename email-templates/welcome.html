@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Welcome to Snappd!</title>
+  <style>
+    /* Reset styles */
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
+
+    /* Base styles */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #1f2937;
+      background-color: #f3f4f6;
+    }
+
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+
+    .email-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 50px 20px;
+      text-align: center;
+    }
+
+    .email-logo {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+
+    .header-title {
+      font-size: 32px;
+      font-weight: bold;
+      color: #ffffff;
+      margin: 10px 0 0 0;
+      letter-spacing: -0.5px;
+    }
+
+    .email-body {
+      padding: 40px 30px;
+    }
+
+    .greeting {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1f2937;
+      margin: 0 0 20px 0;
+    }
+
+    .email-text {
+      font-size: 16px;
+      color: #4b5563;
+      margin: 0 0 20px 0;
+      line-height: 1.6;
+    }
+
+    .button-container {
+      text-align: center;
+      margin: 35px 0;
+    }
+
+    .email-button {
+      display: inline-block;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: transform 0.2s;
+    }
+
+    .email-button:hover {
+      transform: translateY(-2px);
+    }
+
+    .feature-section {
+      margin: 40px 0;
+    }
+
+    .feature-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1f2937;
+      margin: 0 0 20px 0;
+    }
+
+    .feature-grid {
+      display: table;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .feature-item {
+      display: table-cell;
+      width: 50%;
+      padding: 15px;
+      vertical-align: top;
+    }
+
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .feature-item-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+      margin: 10px 0 5px 0;
+    }
+
+    .feature-item-text {
+      font-size: 14px;
+      color: #6b7280;
+      margin: 0;
+    }
+
+    .tips-box {
+      background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%);
+      border-radius: 12px;
+      padding: 25px;
+      margin: 30px 0;
+    }
+
+    .tips-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #4f46e5;
+      margin: 0 0 15px 0;
+    }
+
+    .tip-item {
+      margin: 10px 0;
+      padding-left: 25px;
+      position: relative;
+    }
+
+    .tip-item:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #4f46e5;
+      font-weight: bold;
+    }
+
+    .divider {
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+      margin: 30px 0;
+    }
+
+    .email-footer {
+      background-color: #f9fafb;
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .footer-text {
+      font-size: 14px;
+      color: #6b7280;
+      margin: 0 0 10px 0;
+    }
+
+    .footer-link {
+      color: #4f46e5;
+      text-decoration: none;
+    }
+
+    .social-links {
+      margin: 20px 0;
+    }
+
+    .social-link {
+      display: inline-block;
+      margin: 0 10px;
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media only screen and (max-width: 600px) {
+      .email-body {
+        padding: 30px 20px !important;
+      }
+      .header-title {
+        font-size: 28px !important;
+      }
+      .greeting {
+        font-size: 22px !important;
+      }
+      .email-button {
+        display: block !important;
+        width: 100% !important;
+        box-sizing: border-box;
+      }
+      .feature-item {
+        display: block !important;
+        width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table class="email-container" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+
+          <!-- Header -->
+          <tr>
+            <td class="email-header">
+              <div class="email-logo">🎉</div>
+              <h1 class="header-title">Welcome to Snappd!</h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td class="email-body">
+              <h2 class="greeting">Hi {{userName}},</h2>
+
+              <p class="email-text">
+                Thanks for joining Snappd! We're thrilled to have you as part of our community.
+              </p>
+
+              <p class="email-text">
+                Snappd makes it easy to capture, share, and manage your screenshots. Whether you're collaborating with your team or sharing quick visual feedback, we've got you covered.
+              </p>
+
+              <div class="button-container">
+                <a href="{{dashboardUrl}}" class="email-button">
+                  Go to Your Dashboard
+                </a>
+              </div>
+
+              <hr class="divider">
+
+              <!-- Features Section -->
+              <div class="feature-section">
+                <h3 class="feature-title">What You Can Do with Snappd</h3>
+
+                <table class="feature-grid" role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td class="feature-item">
+                      <div class="feature-icon">📸</div>
+                      <h4 class="feature-item-title">Quick Uploads</h4>
+                      <p class="feature-item-text">Drag and drop screenshots or paste directly from your clipboard</p>
+                    </td>
+                    <td class="feature-item">
+                      <div class="feature-icon">🔗</div>
+                      <h4 class="feature-item-title">Instant Sharing</h4>
+                      <p class="feature-item-text">Get shareable links in seconds to share with anyone</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="feature-item">
+                      <div class="feature-icon">📊</div>
+                      <h4 class="feature-item-title">Track Views</h4>
+                      <p class="feature-item-text">See how many times your screenshots have been viewed</p>
+                    </td>
+                    <td class="feature-item">
+                      <div class="feature-icon">🔒</div>
+                      <h4 class="feature-item-title">Privacy Controls</h4>
+                      <p class="feature-item-text">Set expiration dates and control who can access your images</p>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Quick Start Tips -->
+              <div class="tips-box">
+                <h3 class="tips-title">💡 Quick Start Tips</h3>
+                <div class="tip-item">
+                  <strong>Upload your first screenshot</strong> - Just drag and drop an image onto the dashboard
+                </div>
+                <div class="tip-item">
+                  <strong>Customize your profile</strong> - Add your name and preferences in settings
+                </div>
+                <div class="tip-item">
+                  <strong>Explore plans</strong> - Check out Pro and Team plans for unlimited uploads and advanced features
+                </div>
+              </div>
+
+              <p class="email-text">
+                Have questions? Our support team is here to help. Just reply to this email or visit our help center.
+              </p>
+
+              <p class="email-text" style="margin-top: 30px;">
+                Happy screenshotting! 📸<br>
+                <strong>The Snappd Team</strong>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="email-footer">
+              <p class="footer-text">
+                You're receiving this email because you signed up for <strong>Snappd</strong>
+              </p>
+
+              <div class="social-links">
+                <a href="https://twitter.com/snappd" class="social-link">Twitter</a>
+                <span style="color: #d1d5db;">•</span>
+                <a href="https://github.com/snappd" class="social-link">GitHub</a>
+                <span style="color: #d1d5db;">•</span>
+                <a href="{{appUrl}}/blog" class="social-link">Blog</a>
+              </div>
+
+              <p class="footer-text">
+                <a href="{{dashboardUrl}}/settings" class="footer-link">Account Settings</a> •
+                <a href="mailto:support@snappd.app" class="footer-link">Contact Support</a> •
+                <a href="{{appUrl}}/help" class="footer-link">Help Center</a>
+              </p>
+
+              <p class="footer-text" style="margin-top: 20px; font-size: 12px;">
+                © {{year}} Snappd. All rights reserved.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

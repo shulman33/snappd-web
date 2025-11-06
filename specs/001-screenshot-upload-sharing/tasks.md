@@ -248,16 +248,16 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 10
 
-- [ ] T085 [P] [US10] Use context7 to fetch Next.js 15 headers documentation for extracting x-forwarded-for, then create POST /api/screenshots/[shortId]/track-view route in app/api/screenshots/[shortId]/track-view/route.ts
-- [ ] T086 [US10] Use context7 to fetch Web Crypto API SHA-256 documentation, then implement IP hashing in src/lib/analytics/tracking.ts using SHA-256 with salt
-- [ ] T087 [P] [US10] Use context7 to fetch Vercel Edge runtime geolocation API documentation, then add IP geolocation using Vercel Edge runtime geolocation
-- [ ] T088 [US10] Use Supabase MCP execute_sql to test view_events insert with is_owner flag, then implement view event logging with owner detection (exclude owner views)
-- [ ] T089 [US10] Use context7 to fetch Supabase aggregation query patterns, then create GET /api/screenshots/[shortId]/analytics route in app/api/screenshots/[shortId]/analytics/route.ts
-- [ ] T090 [P] [US10] Use Supabase MCP execute_sql to test GROUP BY date aggregation performance on view_events, then implement daily stats aggregation query from view_events table
-- [ ] T091 [US10] Use Supabase MCP execute_sql to test country_stats JSONB aggregation, then add country-level geographic distribution aggregation to analytics endpoint
-- [ ] T092 [US10] Update GET /api/screenshots route to support sorting by view count (ORDER BY views DESC)
-- [ ] T093 [US10] Use Supabase MCP execute_sql to insert test view_events with different countries and timestamps, then test analytics: multiple views, verify counts and geographic data
-- [ ] T094 [US10] Use Supabase MCP execute_sql to verify is_owner=true views excluded from aggregation, then verify owner views excluded from public analytics
+- [X] T085 [P] [US10] Use context7 to fetch Next.js 15 headers documentation for extracting x-forwarded-for, then create POST /api/screenshots/[shortId]/track-view route in app/api/screenshots/[shortId]/track-view/route.ts
+- [X] T086 [US10] Use context7 to fetch Web Crypto API SHA-256 documentation, then implement IP hashing in src/lib/analytics/tracking.ts using SHA-256 with salt
+- [X] T087 [P] [US10] Use context7 to fetch Vercel Edge runtime geolocation API documentation, then add IP geolocation using Vercel Edge runtime geolocation
+- [X] T088 [US10] Use Supabase MCP execute_sql to test view_events insert with is_owner flag, then implement view event logging with owner detection (exclude owner views)
+- [X] T089 [US10] Use context7 to fetch Supabase aggregation query patterns, then create GET /api/screenshots/[shortId]/analytics route in app/api/screenshots/[shortId]/analytics/route.ts
+- [X] T090 [P] [US10] Use Supabase MCP execute_sql to test GROUP BY date aggregation performance on view_events, then implement daily stats aggregation query from view_events table
+- [X] T091 [US10] Use Supabase MCP execute_sql to test country_stats JSONB aggregation, then add country-level geographic distribution aggregation to analytics endpoint
+- [X] T092 [US10] Update GET /api/screenshots route to support sorting by view count (ORDER BY views DESC)
+- [X] T093 [US10] Use Supabase MCP execute_sql to insert test view_events with different countries and timestamps, then test analytics: multiple views, verify counts and geographic data
+- [X] T094 [US10] Use Supabase MCP execute_sql to verify is_owner=true views excluded from aggregation, then verify owner views excluded from public analytics
 
 **Checkpoint**: Users gain insights into content reach and engagement
 

@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { screenshotAccessLimiter, getRateLimitHeaders } from '@/lib/auth/rate-limit'
 
 interface RouteContext {
   params: Promise<{ shortId: string }>
@@ -21,6 +22,27 @@ interface RouteContext {
 
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
+    // Apply rate limiting based on IP address
+    const ip = request.headers.get('x-forwarded-for') ||
+               request.headers.get('x-real-ip') ||
+               '127.0.0.1'
+    const { success, pending, ...rateLimitInfo } = await screenshotAccessLimiter.limit(ip)
+
+    // Don't block the request, but add rate limit headers
+    // This allows monitoring without breaking functionality initially
+    const headers = getRateLimitHeaders({ success, pending, ...rateLimitInfo })
+
+    if (!success) {
+      return NextResponse.json(
+        {
+          accessible: false,
+          error: 'Too many requests. Please slow down.',
+          sharingMode: null
+        },
+        { status: 429, headers }
+      )
+    }
+
     const supabase = await createServerClient()
     const { shortId } = await context.params
 

@@ -268,16 +268,16 @@ Using Next.js 15 App Router structure:
 **Purpose**: Improvements that affect multiple user stories
 
 - [ ] T095 [P] Use Supabase MCP get_advisors with type='security' and type='performance' for final audit recommendations
-- [ ] T096 [P] Use context7 to fetch Next.js 15 performance optimization best practices including ISR, caching, and bundle optimization
+- [X] T096 [P] Use context7 to fetch Next.js 15 performance optimization best practices including ISR, caching, and bundle optimization
 - [ ] T097 Use context7 to fetch Next.js 15 error handling patterns, then add comprehensive error handling across all API routes
 - [ ] T098 [P] Use context7 to fetch structured logging best practices for Next.js, then implement logging for all upload operations using console structured logging
-- [ ] T099 [P] Use context7 to fetch @upstash/ratelimit documentation for multiple limiters per application, then add rate limiting to all public endpoints using @upstash/ratelimit
+- [X] T099 [P] Use context7 to fetch @upstash/ratelimit documentation for multiple limiters per application, then add rate limiting to all public endpoints using @upstash/ratelimit
 - [ ] T100 Use Supabase MCP get_advisors with type='performance' to identify missing indexes, then optimize database queries with proper indexes
-- [ ] T101 [P] Use context7 to fetch Next.js 15 caching documentation, then configure CDN caching headers for optimized images in API responses
+- [X] T101 [P] Use context7 to fetch Next.js 15 caching documentation, then configure CDN caching headers for optimized images in API responses
 - [ ] T102 Use Supabase MCP list_tables to review all RLS policies, then review and update RLS policies for security hardening
 - [ ] T103 [P] Use context7 to fetch OpenAPI validation tools documentation, then add OpenAPI documentation validation against contracts/openapi.yaml
 - [ ] T104 [P] Use Supabase MCP execute_sql to analyze quota trigger execution time with EXPLAIN ANALYZE, then add monitoring for quota trigger performance
-- [ ] T105 Use context7 to fetch Supabase Edge Functions documentation and pg_cron examples, then configure cleanup job for expired screenshots (pg_cron or Edge Function)
+- [X] T105 Use context7 to fetch Supabase Edge Functions documentation and pg_cron examples, then configure cleanup job for expired screenshots (pg_cron or Edge Function)
 
 ---
 

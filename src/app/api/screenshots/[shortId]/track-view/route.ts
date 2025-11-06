@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { getClientIP, hashIP, hashUserAgent, isBot, getCountryFromRequest } from '@/lib/analytics/tracking';
 import type { TrackViewResponse } from '@/types/analytics';
+import { analyticsLimiter } from '@/lib/auth/rate-limit';
 
 export async function POST(
   request: NextRequest,
@@ -16,6 +17,18 @@ export async function POST(
 ): Promise<NextResponse<TrackViewResponse | { error: string; message: string }>> {
   try {
     const { shortId } = await params;
+
+    // Apply rate limiting to prevent analytics spam
+    const ip = request.headers.get('x-forwarded-for') ||
+               request.headers.get('x-real-ip') ||
+               '127.0.0.1';
+    const { success } = await analyticsLimiter.limit(ip);
+
+    // If rate limited, silently return success without tracking
+    // This prevents breaking the user experience while stopping spam
+    if (!success) {
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
 
     // Create Supabase client with service role for RLS bypass
     const supabase = createServiceClient();

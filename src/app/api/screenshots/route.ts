@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
       storagePath: screenshot.storage_path
     }))
 
-    // Return response with pagination metadata
+    // Return response with pagination metadata and caching headers
     return NextResponse.json(
       {
         screenshots: formattedScreenshots,
@@ -139,7 +139,13 @@ export async function GET(request: NextRequest) {
           order
         }
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          // Cache for 60 seconds, allow stale for 5 minutes while revalidating
+          'Cache-Control': 'private, s-maxage=60, stale-while-revalidate=300',
+        }
+      }
     )
   } catch (error) {
     console.error('Error in /api/screenshots:', error)

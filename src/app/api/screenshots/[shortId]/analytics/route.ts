@@ -122,7 +122,13 @@ export async function GET(
       updated_at: screenshot.updated_at || new Date().toISOString(),
     };
 
-    return NextResponse.json(response, { status: 200 });
+    return NextResponse.json(response, {
+      status: 200,
+      headers: {
+        // Cache analytics for 5 minutes, allow stale for 15 minutes while revalidating
+        'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=900',
+      }
+    });
   } catch (error) {
     console.error('Error fetching analytics:', error);
     return NextResponse.json(

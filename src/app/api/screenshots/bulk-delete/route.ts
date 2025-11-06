@@ -32,6 +32,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { bulkOperationLimiter, getRateLimitHeaders } from '@/lib/auth/rate-limit'
 
 interface BulkDeleteRequest {
   shortIds: string[]
@@ -59,6 +60,20 @@ export async function POST(request: NextRequest) {
           error: 'Authentication required. Please sign in to delete screenshots.'
         },
         { status: 401 }
+      )
+    }
+
+    // Apply rate limiting for bulk operations
+    const { success: rateLimitSuccess, pending, ...rateLimitInfo } = await bulkOperationLimiter.limit(user.id)
+    const headers = getRateLimitHeaders({ success: rateLimitSuccess, pending, ...rateLimitInfo })
+
+    if (!rateLimitSuccess) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Too many bulk operations. Please try again later.'
+        },
+        { status: 429, headers }
       )
     }
 

@@ -190,6 +190,117 @@ export const verificationLimiter = new Ratelimit({
 });
 
 /**
+ * Screenshot upload rate limiter
+ * Prevents abuse of upload functionality
+ *
+ * Limit: 30 upload initializations per hour per user/IP
+ * Algorithm: Sliding window
+ *
+ * @example
+ * ```typescript
+ * const identifier = userId || ip;
+ * const { success } = await uploadLimiter.limit(identifier);
+ *
+ * if (!success) {
+ *   return NextResponse.json(
+ *     {
+ *       error: 'RATE_LIMIT_EXCEEDED',
+ *       message: 'Too many upload attempts. Please try again later.'
+ *     },
+ *     { status: 429 }
+ *   );
+ * }
+ * ```
+ */
+export const uploadLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, '1 h'),
+  analytics: true,
+  prefix: 'ratelimit:upload',
+});
+
+/**
+ * Screenshot access rate limiter (public endpoints)
+ * Prevents abuse of public screenshot access/viewing
+ *
+ * Limit: 100 requests per minute per IP
+ * Algorithm: Sliding window
+ *
+ * @example
+ * ```typescript
+ * const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+ * const { success } = await screenshotAccessLimiter.limit(ip);
+ *
+ * if (!success) {
+ *   return NextResponse.json(
+ *     { error: 'Too many requests. Please slow down.' },
+ *     { status: 429 }
+ *   );
+ * }
+ * ```
+ */
+export const screenshotAccessLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(100, '1 m'),
+  analytics: true,
+  prefix: 'ratelimit:screenshot-access',
+});
+
+/**
+ * Analytics tracking rate limiter
+ * Prevents spam on view tracking endpoints
+ *
+ * Limit: 30 view tracking requests per minute per IP
+ * Algorithm: Sliding window
+ *
+ * @example
+ * ```typescript
+ * const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+ * const { success } = await analyticsLimiter.limit(ip);
+ *
+ * if (!success) {
+ *   // Still return success but don't track the view
+ *   return NextResponse.json({ success: true });
+ * }
+ * ```
+ */
+export const analyticsLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, '1 m'),
+  analytics: true,
+  prefix: 'ratelimit:analytics',
+});
+
+/**
+ * Bulk operations rate limiter
+ * Prevents abuse of bulk delete/management operations
+ *
+ * Limit: 10 bulk operations per hour per user
+ * Algorithm: Sliding window
+ *
+ * @example
+ * ```typescript
+ * const { success } = await bulkOperationLimiter.limit(userId);
+ *
+ * if (!success) {
+ *   return NextResponse.json(
+ *     {
+ *       error: 'RATE_LIMIT_EXCEEDED',
+ *       message: 'Too many bulk operations. Please try again later.'
+ *     },
+ *     { status: 429 }
+ *   );
+ * }
+ * ```
+ */
+export const bulkOperationLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '1 h'),
+  analytics: true,
+  prefix: 'ratelimit:bulk-operation',
+});
+
+/**
  * Helper type for rate limit result
  */
 export type RateLimitResult = {

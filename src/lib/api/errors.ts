@@ -8,10 +8,11 @@
  * @module lib/api/errors
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { PostgrestError } from '@supabase/supabase-js';
 import { ZodError } from 'zod';
 import { AuthErrorCode, AuthError } from '@/lib/auth/errors';
+import { logger } from '@/lib/logger';
 
 /**
  * Comprehensive API error codes for all domains
@@ -177,6 +178,8 @@ interface ErrorHandlerOptions {
   upgrade?: UpgradeInfo;
   /** Bulk operation result */
   bulkResult?: BulkResult;
+  /** Next.js request object (for extracting request ID) */
+  request?: NextRequest | Request | null;
 }
 
 /**
@@ -193,10 +196,12 @@ export class ApiErrorHandler {
     error: unknown,
     options: ErrorHandlerOptions = {}
   ): NextResponse<ApiErrorResponse> {
-    // Log error for debugging
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('API error:', error, options.logContext);
-    }
+    // Log error with request correlation using centralized logger
+    logger.error('API error occurred', options.request, {
+      error: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+      ...options.logContext,
+    });
 
     // Postgres/Supabase database errors
     if (this.isPostgrestError(error)) {
@@ -225,8 +230,10 @@ export class ApiErrorHandler {
   static badRequest(
     code: ApiErrorCode,
     message: string,
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Bad Request: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 400, { details });
   }
 
@@ -236,8 +243,10 @@ export class ApiErrorHandler {
   static unauthorized(
     code: ApiErrorCode = ApiErrorCode.UNAUTHORIZED,
     message: string = 'Authentication required',
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Unauthorized: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 401, { details });
   }
 
@@ -247,8 +256,10 @@ export class ApiErrorHandler {
   static forbidden(
     code: ApiErrorCode,
     message: string,
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Forbidden: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 403, { details });
   }
 
@@ -258,8 +269,10 @@ export class ApiErrorHandler {
   static notFound(
     code: ApiErrorCode,
     message: string,
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.info(`Not Found: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 404, { details });
   }
 
@@ -269,8 +282,10 @@ export class ApiErrorHandler {
   static conflict(
     code: ApiErrorCode,
     message: string,
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Conflict: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 409, { details });
   }
 
@@ -280,8 +295,10 @@ export class ApiErrorHandler {
   static gone(
     code: ApiErrorCode,
     message: string,
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.info(`Resource Gone: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 410, { details });
   }
 
@@ -291,8 +308,10 @@ export class ApiErrorHandler {
   static payloadTooLarge(
     code: ApiErrorCode,
     message: string,
-    quota?: QuotaInfo
+    quota?: QuotaInfo,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Payload Too Large: ${message}`, request, { code, quota });
     return this.createErrorResponse(code, message, 413, { quota });
   }
 
@@ -302,8 +321,10 @@ export class ApiErrorHandler {
   static unprocessableEntity(
     code: ApiErrorCode,
     message: string,
-    field?: string
+    field?: string,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Unprocessable Entity: ${message}`, request, { code, field });
     return this.createErrorResponse(code, message, 422, { field });
   }
 
@@ -312,8 +333,10 @@ export class ApiErrorHandler {
    */
   static rateLimitExceeded(
     message: string = 'Too many requests. Please try again later.',
-    retryAfter?: number
+    retryAfter?: number,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Rate Limit Exceeded: ${message}`, request, { retryAfter });
     return this.createErrorResponse(
       ApiErrorCode.RATE_LIMIT_EXCEEDED,
       message,
@@ -328,8 +351,10 @@ export class ApiErrorHandler {
   static internal(
     code: ApiErrorCode = ApiErrorCode.INTERNAL_ERROR,
     message: string = 'An unexpected error occurred',
-    details?: unknown
+    details?: unknown,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.error(`Internal Server Error: ${message}`, request, { code, details });
     return this.createErrorResponse(code, message, 500, { details, retryable: true });
   }
 
@@ -340,8 +365,10 @@ export class ApiErrorHandler {
     code: ApiErrorCode,
     message: string,
     quota: QuotaInfo,
-    upgrade: UpgradeInfo
+    upgrade: UpgradeInfo,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Quota Exceeded: ${message}`, request, { code, quota, upgrade });
     return this.createErrorResponse(code, message, 403, { quota, upgrade });
   }
 
@@ -350,8 +377,10 @@ export class ApiErrorHandler {
    */
   static bulkPartialFailure(
     message: string,
-    bulkResult: BulkResult
+    bulkResult: BulkResult,
+    request?: NextRequest | Request | null
   ): NextResponse<ApiErrorResponse> {
+    logger.warn(`Bulk Operation Partial Failure: ${message}`, request, { bulkResult });
     return this.createErrorResponse(
       ApiErrorCode.INTERNAL_ERROR,
       message,
@@ -517,13 +546,13 @@ export class ApiErrorHandler {
   ): NextResponse<ApiErrorResponse> {
     const isDev = process.env.NODE_ENV !== 'production';
 
-    // Log full error for debugging
-    console.error('Unhandled API error:', error, options.logContext);
+    // Error already logged in handle() method via centralized logger
 
     return this.internal(
       ApiErrorCode.INTERNAL_ERROR,
       'An unexpected error occurred. Please try again later.',
-      isDev && options.includeDetails ? String(error) : undefined
+      isDev && options.includeDetails ? String(error) : undefined,
+      options.request
     );
   }
 

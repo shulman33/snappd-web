@@ -19,6 +19,7 @@ import { hashPassword, validatePasswordStrength } from '@/lib/uploads/security'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
 import { ApiResponse } from '@/lib/api/response'
+import { logger } from '@/lib/logger'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -319,6 +320,8 @@ async function handleBatchUpload(
 
 export async function POST(request: NextRequest) {
   try {
+    logger.info('Upload initialization requested', request);
+
     const supabase = await createServerClient()
 
     // Check authentication
@@ -330,9 +333,13 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return ApiErrorHandler.unauthorized(
         ApiErrorCode.UNAUTHORIZED,
-        'Authentication required. Please sign in to upload screenshots.'
+        'Authentication required. Please sign in to upload screenshots.',
+        undefined,
+        request
       )
     }
+
+    logger.debug('User authenticated for upload', request, { userId: user.id });
 
     // Parse request body
     const body = await request.json()
@@ -342,8 +349,17 @@ export async function POST(request: NextRequest) {
 
     if (isBatchUpload) {
       // Handle batch upload
+      logger.info('Batch upload requested', request, {
+        userId: user.id,
+        fileCount: body.files.length
+      });
       return handleBatchUpload(body as BatchUploadRequest, user.id, supabase)
     }
+
+    logger.info('Single upload requested', request, {
+      userId: user.id,
+      filename: body.filename
+    });
 
     // Handle single upload (backward compatible)
     const { filename, fileSize: fileSizeRaw, mimeType, sharingMode, password } = body
@@ -352,7 +368,9 @@ export async function POST(request: NextRequest) {
     if (!filename || !fileSizeRaw || !mimeType) {
       return ApiErrorHandler.badRequest(
         ApiErrorCode.VALIDATION_ERROR,
-        'Missing required fields: filename, fileSize, mimeType'
+        'Missing required fields: filename, fileSize, mimeType',
+        undefined,
+        request
       )
     }
 
@@ -361,7 +379,9 @@ export async function POST(request: NextRequest) {
     if (!sharingValidation.isValid) {
       return ApiErrorHandler.badRequest(
         ApiErrorCode.VALIDATION_ERROR,
-        sharingValidation.error || 'Invalid sharing mode configuration'
+        sharingValidation.error || 'Invalid sharing mode configuration',
+        undefined,
+        request
       )
     }
 
@@ -377,7 +397,8 @@ export async function POST(request: NextRequest) {
           current: fileSize,
           limit: MAX_FILE_SIZE,
           unit: 'bytes'
-        }
+        },
+        request
       )
     }
 
@@ -393,7 +414,9 @@ export async function POST(request: NextRequest) {
     if (!allowedMimeTypes.includes(mimeType)) {
       return ApiErrorHandler.badRequest(
         ApiErrorCode.UPLOAD_INVALID_FILE_TYPE,
-        'Invalid file type. Allowed types: PNG, JPEG, WEBP, GIF'
+        'Invalid file type. Allowed types: PNG, JPEG, WEBP, GIF',
+        undefined,
+        request
       )
     }
 
@@ -413,9 +436,16 @@ export async function POST(request: NextRequest) {
           message: 'Upgrade to Pro for unlimited uploads',
           plan: 'pro',
           url: '/pricing'
-        }
+        },
+        request
       )
     }
+
+    logger.debug('Quota check passed', request, {
+      userId: user.id,
+      plan: quotaCheck.plan,
+      remaining: quotaCheck.remaining
+    });
 
     // Generate storage path
     // We'll use a temporary hash for path generation
@@ -428,10 +458,16 @@ export async function POST(request: NextRequest) {
     const signedUrlResult = await createSignedUploadUrl(storagePath, false)
 
     if ('error' in signedUrlResult) {
-      console.error('Failed to create signed URL:', signedUrlResult.error)
-      return NextResponse.json(
-        { error: 'Failed to generate upload URL. Please try again.' },
-        { status: 500 }
+      logger.error('Failed to create signed URL', request, {
+        userId: user.id,
+        error: signedUrlResult.error,
+        storagePath
+      });
+      return ApiErrorHandler.internal(
+        ApiErrorCode.STORAGE_ERROR,
+        'Failed to generate upload URL. Please try again.',
+        undefined,
+        request
       )
     }
 
@@ -451,15 +487,27 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (sessionError || !uploadSession) {
-      console.error('Failed to create upload session:', sessionError)
-      return NextResponse.json(
-        { error: 'Failed to initialize upload session. Please try again.' },
-        { status: 500 }
+      logger.error('Failed to create upload session', request, {
+        userId: user.id,
+        error: sessionError,
+        filename
+      });
+      return ApiErrorHandler.internal(
+        ApiErrorCode.DATABASE_ERROR,
+        'Failed to initialize upload session. Please try again.',
+        undefined,
+        request
       )
     }
 
+    logger.info('Upload session created successfully', request, {
+      userId: user.id,
+      uploadSessionId: uploadSession.id,
+      filename
+    });
+
     // Return upload session details
-    return NextResponse.json(
+    return ApiResponse.success(
       {
         uploadSessionId: uploadSession.id,
         signedUrl: signedUrlResult.signedUrl,
@@ -473,13 +521,14 @@ export async function POST(request: NextRequest) {
           remaining: quotaCheck.remaining
         }
       },
-      { status: 200 }
+      'Upload session initialized successfully'
     )
   } catch (error) {
-    console.error('Error in /api/upload/init:', error)
-    return NextResponse.json(
-      { error: 'Internal server error. Please try again later.' },
-      { status: 500 }
-    )
+    return ApiErrorHandler.handle(error, {
+      request,
+      logContext: {
+        route: 'POST /api/upload/init'
+      }
+    });
   }
 }

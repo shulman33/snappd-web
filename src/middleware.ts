@@ -2,11 +2,12 @@
  * Next.js Edge Middleware
  *
  * This middleware runs at the edge for every request and handles:
- * 1. Session token refresh (automatic token renewal)
- * 2. Protected route authentication checks
- * 3. IP-based rate limiting for /api/auth/* routes (with graceful degradation)
- * 4. Proper error responses with retry headers
- * 5. CORS headers for browser extension support
+ * 1. Request ID generation and injection (for log correlation)
+ * 2. Session token refresh (automatic token renewal)
+ * 3. Protected route authentication checks
+ * 4. IP-based rate limiting for /api/auth/* routes (with graceful degradation)
+ * 5. Proper error responses with retry headers
+ * 6. CORS headers for browser extension support
  *
  * Rate Limiting Strategy:
  * - Fails open if Redis is unavailable (maintains service availability)
@@ -50,19 +51,42 @@ const publicApiRoutes = [
 const authRoutes = ['/login', '/signup'];
 
 /**
+ * Generate a unique request ID for log correlation
+ * Reuses existing ID from load balancer/proxy if present
+ */
+function generateRequestId(): string {
+  return `req-${crypto.randomUUID()}`;
+}
+
+/**
  * Middleware function that runs on every request
  *
  * Order of operations:
- * 1. Update session (refresh token if needed)
- * 2. Check protected routes and redirect if unauthenticated
- * 3. Apply IP-based rate limiting to auth endpoints
- * 4. Add CORS headers for browser extension support
+ * 1. Generate or reuse request ID (for log correlation)
+ * 2. Update session (refresh token if needed)
+ * 3. Check protected routes and redirect if unauthenticated
+ * 4. Apply IP-based rate limiting to auth endpoints
+ * 5. Add CORS headers for browser extension support
+ * 6. Inject request ID into response headers
  *
  * @param request - The incoming Next.js request object
  * @param event - The Next.js fetch event for handling background operations
  */
 export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
+
+  // =========================================================================
+  // Step 0: Generate or reuse request ID for log correlation
+  // =========================================================================
+  // Check if request already has an ID (from load balancer/proxy)
+  let requestId = request.headers.get('x-request-id');
+  if (!requestId) {
+    requestId = generateRequestId();
+  }
+
+  // Clone request headers and add request ID
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-request-id', requestId);
 
   // =========================================================================
   // Step 1: Update session (refresh token if expired)
@@ -74,7 +98,15 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     !pathname.startsWith('/api/_next') &&
     !pathname.match(/\.(ico|png|jpg|jpeg|gif|svg|webp)$/)
   ) {
-    const supabaseResponse = await updateSession(request);
+    // Create a new request with the updated headers (including request ID)
+    const requestWithHeaders = new NextRequest(request, {
+      headers: requestHeaders,
+    });
+
+    const supabaseResponse = await updateSession(requestWithHeaders);
+
+    // Inject request ID into response headers for client correlation
+    supabaseResponse.headers.set('x-request-id', requestId);
 
     // =========================================================================
     // Step 2: Protected route checks
@@ -125,12 +157,16 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
       const redirectUrl = new URL('/login', request.url);
       // Preserve the original URL for redirect after login
       redirectUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(redirectUrl);
+      const redirectResponse = NextResponse.redirect(redirectUrl);
+      redirectResponse.headers.set('x-request-id', requestId);
+      return redirectResponse;
     }
 
     // Redirect authenticated users from auth routes to dashboard
     if (isAuthRoute && hasSession) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      const redirectResponse = NextResponse.redirect(new URL('/dashboard', request.url));
+      redirectResponse.headers.set('x-request-id', requestId);
+      return redirectResponse;
     }
 
     // If not an auth route, continue with the supabase response
@@ -195,6 +231,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
         {
           status: 429,
           headers: {
+            'x-request-id': requestId,
             'X-RateLimit-Limit': limit.toString(),
             'X-RateLimit-Remaining': remaining.toString(),
             'X-RateLimit-Reset': new Date(reset).toISOString(),
@@ -206,7 +243,12 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     }
 
     // If rate limit passed, add rate limit headers to the response
-    const response = NextResponse.next();
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    response.headers.set('x-request-id', requestId);
     response.headers.set('X-RateLimit-Limit', limit.toString());
     response.headers.set('X-RateLimit-Remaining', remaining.toString());
     response.headers.set('X-RateLimit-Reset', new Date(reset).toISOString());
@@ -257,8 +299,14 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
     return response;
   }
 
-  // For non-auth routes, just pass through
-  return NextResponse.next();
+  // For non-auth routes, pass through with request ID
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+  response.headers.set('x-request-id', requestId);
+  return response;
 }
 
 /**

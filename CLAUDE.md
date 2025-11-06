@@ -341,7 +341,257 @@ Consistent status code mappings:
 - Rate limit metadata with retry information
 - Environment-aware error details (dev mode only)
 
+## Request ID Tracking & Centralized Logging
+
+### Overview
+
+Snappd implements comprehensive request ID tracking and centralized logging for better debugging, monitoring, and production observability.
+
+**Location**: [src/lib/logger.ts](src/lib/logger.ts), [src/middleware.ts](src/middleware.ts)
+
+### Request ID System
+
+#### How It Works
+
+1. **Generation**: Middleware generates unique UUID for each request (`req-{uuid}`)
+2. **Reuse**: Existing `x-request-id` from load balancers/proxies is preserved
+3. **Propagation**: Request ID is injected into:
+   - Request headers (available to all route handlers)
+   - Response headers (for client-side correlation)
+   - All log entries automatically
+
+#### Request ID Format
+
+```
+req-550e8400-e29b-41d4-a716-446655440000
+```
+
+### Centralized Logger
+
+The `logger` utility provides structured logging with automatic request ID extraction.
+
+#### Basic Usage
+
+```typescript
+import { logger } from '@/lib/logger';
+import { NextRequest } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  // Info logging
+  logger.info('Processing screenshot request', request, {
+    shortId: params.shortId
+  });
+
+  try {
+    // ... route logic
+  } catch (error) {
+    // Error logging
+    logger.error('Failed to process screenshot', request, {
+      error,
+      shortId: params.shortId
+    });
+  }
+}
+```
+
+#### Log Levels
+
+```typescript
+logger.debug('Verbose development info', request, metadata);  // DEV only
+logger.info('General information', request, metadata);        // Always logged
+logger.warn('Non-critical issues', request, metadata);         // Always logged
+logger.error('Critical errors', request, metadata);            // Always logged
+```
+
+#### Log Output Formats
+
+**Development** (Human-Readable):
+```
+[req-abc123] [INFO] [GET /api/screenshots/xyz] Processing screenshot request
+{
+  "shortId": "xyz",
+  "userId": "123"
+}
+```
+
+**Production** (JSON for Log Aggregation):
+```json
+{
+  "timestamp": "2025-11-05T10:30:45.123Z",
+  "level": "INFO",
+  "requestId": "req-abc123",
+  "message": "Processing screenshot request",
+  "route": "/api/screenshots/xyz",
+  "method": "GET",
+  "metadata": {
+    "shortId": "xyz",
+    "userId": "123"
+  }
+}
+```
+
+### Integration with Error Handling
+
+The unified error handling system automatically includes request IDs in all error logs.
+
+#### Updated Error Handler Usage
+
+```typescript
+import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
+
+export async function POST(request: NextRequest) {
+  try {
+    // ... route logic
+  } catch (error) {
+    // Automatically logs with request ID
+    return ApiErrorHandler.handle(error, {
+      request,  // Pass request for automatic request ID extraction
+      logContext: {
+        route: 'POST /api/upload/init',
+        userId: user?.id
+      }
+    });
+  }
+}
+```
+
+#### Error Creator Methods (with Request ID)
+
+All error creator methods now accept an optional `request` parameter:
+
+```typescript
+// 400 Bad Request
+return ApiErrorHandler.badRequest(
+  ApiErrorCode.VALIDATION_ERROR,
+  'Missing required fields',
+  details,
+  request  // Auto-logs with request ID
+);
+
+// 401 Unauthorized
+return ApiErrorHandler.unauthorized(
+  ApiErrorCode.UNAUTHORIZED,
+  'Authentication required',
+  undefined,
+  request
+);
+
+// 404 Not Found
+return ApiErrorHandler.notFound(
+  ApiErrorCode.SCREENSHOT_NOT_FOUND,
+  'Screenshot not found',
+  undefined,
+  request
+);
+
+// 403 Quota Exceeded (with upgrade prompt)
+return ApiErrorHandler.quotaExceeded(
+  ApiErrorCode.MONTHLY_UPLOAD_LIMIT_EXCEEDED,
+  'Monthly upload quota exceeded',
+  { current: 100, limit: 100, unit: 'uploads' },
+  { message: 'Upgrade to Pro', plan: 'pro', url: '/pricing' },
+  request
+);
+```
+
+### Performance Timing
+
+Measure operation duration with built-in timing utilities:
+
+```typescript
+const timer = logger.startTimer();
+
+await someExpensiveOperation();
+
+const duration = timer.end();
+logger.info('Operation completed', request, { durationMs: duration });
+```
+
+Or use automatic timing wrapper:
+
+```typescript
+const result = await logger.withTiming(
+  async () => {
+    return await fetchScreenshot(id);
+  },
+  'Fetched screenshot from database',
+  request,
+  { screenshotId: id }
+);
+// Automatically logs with duration
+```
+
+### Migration Pattern
+
+When updating existing routes, follow this pattern:
+
+**Before:**
+```typescript
+export async function POST(request: NextRequest) {
+  try {
+    // ... logic
+  } catch (error) {
+    console.error('Error in route:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**After:**
+```typescript
+import { logger } from '@/lib/logger';
+import { ApiErrorHandler } from '@/lib/api/errors';
+
+export async function POST(request: NextRequest) {
+  try {
+    logger.info('Route started', request);
+    // ... logic
+    logger.info('Route completed successfully', request, { userId });
+  } catch (error) {
+    return ApiErrorHandler.handle(error, {
+      request,
+      logContext: { route: 'POST /api/route' }
+    });
+  }
+}
+```
+
+### Benefits
+
+1. **Debugging**: Trace requests across multi-step workflows (upload → storage → database)
+2. **Correlation**: Link related logs from a single user action
+3. **Monitoring**: Track performance, errors, and bottlenecks per request
+4. **Security Audit**: Correlate auth events with specific user sessions
+5. **Production Ready**: JSON logs compatible with Datadog, Sentry, CloudWatch, etc.
+
+### Migration Status
+
+✅ **Core Infrastructure**:
+- Middleware request ID generation
+- Centralized logger utility
+- Error handler integration
+
+✅ **Example Routes**:
+- `/api/upload/init` - Fully migrated with request correlation
+
+🔄 **Remaining Routes** (follow the same pattern):
+- Other upload routes (`/api/upload/[id]/complete`, `/api/upload/[id]/progress`)
+- Screenshot routes (`/api/screenshots/*`)
+- Auth routes (`/api/auth/*`)
+
+### Best Practices
+
+1. **Always pass request**: Include `request` parameter in logger and error handler calls
+2. **Use appropriate log levels**: `debug` for verbose, `info` for important events, `warn` for issues, `error` for failures
+3. **Include context**: Add metadata like `userId`, `screenshotId`, etc. for better debugging
+4. **Log at boundaries**: Log at entry/exit points and before/after external calls (database, storage)
+5. **Avoid sensitive data**: Never log passwords, tokens, or PII in production
+
 ## Recent Changes
 - 005-auth-system: Added TypeScript 5.x with Next.js 15.5.5 (App Router), React 19.1.0
 - Email integration: Added SendGrid email service with SMTP configuration and SDK utilities
 - API error handling: Implemented unified error response system with standardized codes, quota handling, and bulk operation support
+- Request ID tracking: Implemented request ID generation in middleware and centralized logging system with automatic request correlation

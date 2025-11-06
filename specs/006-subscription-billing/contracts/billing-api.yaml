@@ -1,0 +1,1002 @@
+openapi: 3.1.0
+info:
+  title: Snappd Billing API
+  version: 1.0.0
+  description: |
+    Subscription billing and payment management API for Snappd.
+
+    ## Features
+    - Stripe-powered subscription management (Free, Pro, Team plans)
+    - 14-day free trials with automatic conversion
+    - Multi-seat team billing with proration
+    - Usage-based quota enforcement
+    - Payment failure recovery and dunning
+    - Invoice generation and tax calculation
+
+    ## Authentication
+    All endpoints require authentication via Bearer token or HTTP-only cookie.
+
+servers:
+  - url: https://snappd.io/api/v1/billing
+    description: Production
+  - url: http://localhost:3000/api/v1/billing
+    description: Local development
+
+tags:
+  - name: Checkout
+    description: Subscription creation and plan selection
+  - name: Portal
+    description: Self-service billing management
+  - name: Subscriptions
+    description: Subscription lifecycle management
+  - name: Usage
+    description: Quota tracking and enforcement
+  - name: Teams
+    description: Team billing and member management
+  - name: Webhooks
+    description: Stripe webhook processing
+
+security:
+  - BearerAuth: []
+  - CookieAuth: []
+
+paths:
+  /create-checkout:
+    post:
+      tags: [Checkout]
+      summary: Create Stripe Checkout Session
+      description: |
+        Initiates subscription creation via Stripe Checkout.
+        Supports:
+        - Individual plans (Pro monthly/annual)
+        - Team plans (3+ seats, monthly/annual)
+        - 14-day free trials (payment method required)
+        - Automatic tax calculation
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planType, billingCycle]
+              properties:
+                planType:
+                  type: string
+                  enum: [pro, team]
+                  description: Plan type to subscribe to
+                billingCycle:
+                  type: string
+                  enum: [monthly, annual]
+                  description: Billing frequency
+                seatCount:
+                  type: integer
+                  minimum: 3
+                  description: Required for team plans (minimum 3 seats)
+                successUrl:
+                  type: string
+                  format: uri
+                  description: Redirect URL after successful payment
+                cancelUrl:
+                  type: string
+                  format: uri
+                  description: Redirect URL if user cancels
+              example:
+                planType: pro
+                billingCycle: monthly
+                successUrl: https://snappd.io/billing/success
+                cancelUrl: https://snappd.io/pricing
+      responses:
+        '200':
+          description: Checkout session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                    description: Stripe Checkout Session ID
+                  url:
+                    type: string
+                    format: uri
+                    description: Stripe Checkout URL to redirect user
+              example:
+                sessionId: cs_test_abc123
+                url: https://checkout.stripe.com/c/pay/cs_test_abc123
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: User already has active subscription
+
+  /create-portal:
+    post:
+      tags: [Portal]
+      summary: Create Stripe Customer Portal Session
+      description: |
+        Generates a Customer Portal link for self-service billing management.
+        Users can:
+        - Update payment methods
+        - View invoice history
+        - Cancel subscriptions
+        - Upgrade/downgrade plans
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [returnUrl]
+              properties:
+                returnUrl:
+                  type: string
+                  format: uri
+                  description: URL to return to after portal session
+              example:
+                returnUrl: https://snappd.io/dashboard
+      responses:
+        '200':
+          description: Portal session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    description: Stripe Customer Portal URL
+              example:
+                url: https://billing.stripe.com/session/abc123
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: No active subscription found
+
+  /subscription:
+    get:
+      tags: [Subscriptions]
+      summary: Get Current Subscription
+      description: Returns user's current subscription details with plan information
+      responses:
+        '200':
+          description: Subscription retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /subscription/cancel:
+    post:
+      tags: [Subscriptions]
+      summary: Cancel Subscription
+      description: |
+        Cancels active subscription with two options:
+        - End of period: Maintains access until current period ends (default)
+        - Immediate: Revokes access and processes prorated refund
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                immediate:
+                  type: boolean
+                  default: false
+                  description: If true, cancel immediately with prorated refund
+                reason:
+                  type: string
+                  description: Optional cancellation reason for analytics
+              example:
+                immediate: false
+                reason: No longer needed
+      responses:
+        '200':
+          description: Subscription canceled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  subscription:
+                    $ref: '#/components/schemas/Subscription'
+                  refundAmount:
+                    type: integer
+                    description: Refund amount in cents (only if immediate=true)
+              example:
+                message: Subscription will be canceled at the end of the current period
+                subscription:
+                  id: sub_abc123
+                  status: active
+                  cancelAtPeriodEnd: true
+                  currentPeriodEnd: "2025-12-05T00:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /subscription/reactivate:
+    post:
+      tags: [Subscriptions]
+      summary: Reactivate Canceled Subscription
+      description: Reactivates a subscription that was canceled but still within retention period
+      responses:
+        '200':
+          description: Subscription reactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  subscription:
+                    $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /usage:
+    get:
+      tags: [Usage]
+      summary: Get Current Usage and Quotas
+      description: Returns current billing period usage metrics and plan quotas
+      responses:
+        '200':
+          description: Usage retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period:
+                    type: object
+                    properties:
+                      start:
+                        type: string
+                        format: date-time
+                      end:
+                        type: string
+                        format: date-time
+                  plan:
+                    type: string
+                    enum: [free, pro, team]
+                  usage:
+                    type: object
+                    properties:
+                      screenshots:
+                        type: object
+                        properties:
+                          current:
+                            type: integer
+                          limit:
+                            type: integer
+                            nullable: true
+                            description: null indicates unlimited
+                          percentUsed:
+                            type: number
+                            format: float
+                      storage:
+                        type: object
+                        properties:
+                          currentBytes:
+                            type: integer
+                          limitBytes:
+                            type: integer
+                            nullable: true
+                      bandwidth:
+                        type: object
+                        properties:
+                          currentBytes:
+                            type: integer
+                          limitBytes:
+                            type: integer
+                            nullable: true
+              example:
+                period:
+                  start: "2025-11-01T00:00:00Z"
+                  end: "2025-12-01T00:00:00Z"
+                plan: free
+                usage:
+                  screenshots:
+                    current: 8
+                    limit: 10
+                    percentUsed: 80.0
+                  storage:
+                    currentBytes: 5242880
+                    limitBytes: null
+                  bandwidth:
+                    currentBytes: 10485760
+                    limitBytes: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /usage/check:
+    post:
+      tags: [Usage]
+      summary: Check Upload Quota
+      description: |
+        Validates if user can upload a screenshot based on current quota.
+        Returns allowed status and upgrade prompt if needed.
+      responses:
+        '200':
+          description: Quota check completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowed:
+                    type: boolean
+                  current:
+                    type: integer
+                  limit:
+                    type: integer
+                    nullable: true
+                  upgradeRequired:
+                    type: boolean
+                  upgradeUrl:
+                    type: string
+                    format: uri
+                    description: URL to upgrade page (only if upgradeRequired=true)
+              example:
+                allowed: false
+                current: 10
+                limit: 10
+                upgradeRequired: true
+                upgradeUrl: https://snappd.io/pricing
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /teams:
+    post:
+      tags: [Teams]
+      summary: Create Team Subscription
+      description: Creates a new team with subscription and makes requester the admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, seatCount, billingCycle]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                seatCount:
+                  type: integer
+                  minimum: 3
+                billingCycle:
+                  type: string
+                  enum: [monthly, annual]
+                billingEmail:
+                  type: string
+                  format: email
+                companyName:
+                  type: string
+              example:
+                name: Acme Design Team
+                seatCount: 5
+                billingCycle: monthly
+                billingEmail: billing@acme.com
+                companyName: Acme Corporation
+      responses:
+        '201':
+          description: Team created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: User already has active subscription
+
+  /teams/{teamId}:
+    get:
+      tags: [Teams]
+      summary: Get Team Details
+      description: Returns team information including members and billing status
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Team retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Teams]
+      summary: Update Team Details
+      description: Updates team name, seat count, or billing information (admin only)
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                seatCount:
+                  type: integer
+                  minimum: 3
+                  description: Triggers proration if changed
+                billingEmail:
+                  type: string
+                  format: email
+                companyName:
+                  type: string
+              example:
+                seatCount: 7
+      responses:
+        '200':
+          description: Team updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /teams/{teamId}/members:
+    post:
+      tags: [Teams]
+      summary: Invite Team Member
+      description: |
+        Sends invitation email to new team member.
+        Invitation expires after 7 days.
+        Adding member may trigger prorated charge.
+
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [admin, member]
+                  default: member
+              example:
+                email: newmember@acme.com
+                role: member
+      responses:
+        '201':
+          description: Invitation sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  invitation:
+                    $ref: '#/components/schemas/TeamMember'
+                  proratedCharge:
+                    type: integer
+                    description: Prorated charge in cents (if applicable)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: Member already exists or seat limit reached
+
+  /teams/{teamId}/members/{memberId}:
+    delete:
+      tags: [Teams]
+      summary: Remove Team Member
+      description: |
+        Removes member from team and revokes premium access.
+        Generates prorated credit for remaining billing period.
+
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  creditAmount:
+                    type: integer
+                    description: Prorated credit in cents
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: Cannot remove last admin or reduce below 3 seats
+
+  /teams/invitations/accept:
+    post:
+      tags: [Teams]
+      summary: Accept Team Invitation
+      description: Accepts team invitation via token from email link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Invitation token from email link
+              example:
+                token: inv_abc123xyz
+      responses:
+        '200':
+          description: Invitation accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  team:
+                    $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Invalid or expired token
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+          description: User already has active subscription
+
+  /invoices:
+    get:
+      tags: [Subscriptions]
+      summary: List Invoices
+      description: Returns paginated list of user's invoices
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, open, paid, void, uncollectible]
+      responses:
+        '200':
+          description: Invoices retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /invoices/{invoiceId}:
+    get:
+      tags: [Subscriptions]
+      summary: Get Invoice Details
+      description: Returns detailed invoice with line items and PDF link
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invoice retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhook:
+    post:
+      tags: [Webhooks]
+      summary: Stripe Webhook Endpoint
+      description: |
+        Processes Stripe webhook events with signature verification and idempotency.
+
+        **Handled Events:**
+        - `customer.subscription.created` - Initialize subscription
+        - `customer.subscription.updated` - Update subscription status
+        - `customer.subscription.deleted` - Mark subscription canceled
+        - `invoice.payment_succeeded` - Record successful payment
+        - `invoice.payment_failed` - Initiate dunning process
+        - `customer.subscription.trial_will_end` - Send trial reminder
+
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Stripe Event object
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+        '400':
+          description: Invalid signature or malformed payload
+        '409':
+          description: Event already processed (idempotency)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: sb-access-token
+
+  schemas:
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        planType:
+          type: string
+          enum: [free, pro, team]
+        billingCycle:
+          type: string
+          enum: [monthly, annual]
+        status:
+          type: string
+          enum: [trialing, active, past_due, canceled, suspended]
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        trialEnd:
+          type: string
+          format: date-time
+          nullable: true
+        cancelAtPeriodEnd:
+          type: boolean
+        canceledAt:
+          type: string
+          format: date-time
+          nullable: true
+        seatCount:
+          type: integer
+          nullable: true
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        adminUserId:
+          type: string
+          format: uuid
+        seatCount:
+          type: integer
+        filledSeats:
+          type: integer
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+        billingEmail:
+          type: string
+          format: email
+          nullable: true
+        companyName:
+          type: string
+          nullable: true
+
+    TeamMember:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          nullable: true
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, member]
+        status:
+          type: string
+          enum: [pending, active, removed]
+        invitedAt:
+          type: string
+          format: date-time
+        joinedAt:
+          type: string
+          format: date-time
+          nullable: true
+        invitationExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceNumber:
+          type: string
+        status:
+          type: string
+          enum: [draft, open, paid, void, uncollectible]
+        subtotal:
+          type: integer
+          description: Amount in cents
+        tax:
+          type: integer
+          description: Tax amount in cents
+        total:
+          type: integer
+          description: Total amount in cents
+        amountPaid:
+          type: integer
+          description: Amount paid in cents
+        amountDue:
+          type: integer
+          description: Amount due in cents
+        lineItems:
+          type: array
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              quantity:
+                type: integer
+              unitAmount:
+                type: integer
+              amount:
+                type: integer
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        hostedInvoiceUrl:
+          type: string
+          format: uri
+          nullable: true
+        invoicePdfUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+              statusCode:
+                type: integer
+                example: 400
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: UNAUTHORIZED
+              message:
+                type: string
+                example: Authentication required
+              statusCode:
+                type: integer
+                example: 401
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: FORBIDDEN
+              message:
+                type: string
+              statusCode:
+                type: integer
+                example: 403
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: NOT_FOUND
+              message:
+                type: string
+              statusCode:
+                type: integer
+                example: 404
+
+    Conflict:
+      description: Conflict - resource already exists or state conflict
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: CONFLICT
+              message:
+                type: string
+              statusCode:
+                type: integer
+                example: 409

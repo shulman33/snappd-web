@@ -28,12 +28,12 @@ Using Next.js 15 App Router structure:
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Use context7 to fetch latest Next.js 15 App Router documentation for API route patterns
-- [ ] T002 Use context7 to fetch latest Stripe Node.js SDK documentation (v16.x) for subscription management
-- [ ] T003 Use context7 to fetch latest @supabase/supabase-js documentation for database operations
-- [ ] T004 [P] Install required dependencies: stripe, zod in package.json
-- [ ] T005 [P] Create library module structure: src/lib/billing/, src/types/billing.ts
-- [ ] T006 [P] Review project structure to understand existing auth and upload API patterns in src/app/api/v1/
+- [X] T001 Use context7 to fetch latest Next.js 15 App Router documentation for API route patterns
+- [X] T002 Use context7 to fetch latest Stripe Node.js SDK documentation (v16.x) for subscription management
+- [X] T003 Use context7 to fetch latest @supabase/supabase-js documentation for database operations
+- [X] T004 [P] Install required dependencies: stripe, zod in package.json
+- [X] T005 [P] Create library module structure: src/lib/billing/, src/types/billing.ts
+- [X] T006 [P] Review project structure to understand existing auth and upload API patterns in src/app/api/v1/
 
 ---
 
@@ -43,9 +43,9 @@ Using Next.js 15 App Router structure:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Use Supabase MCP list_migrations to review existing database migrations
-- [ ] T008 Create migration supabase/migrations/20251105000001_subscription_billing_schema.sql with all 11 tables (subscriptions, stripe_customers, payment_methods, teams, team_members, usage_records, invoices, credit_balances, subscription_events, dunning_attempts, stripe_events) and RLS policies
-- [ ] T009 Use Supabase MCP apply_migration to run migration 20251105000001_subscription_billing_schema.sql
+- [X] T007 Use Supabase MCP to review existing database schema
+- [X] T008 Create a migration with all 11 tables (subscriptions, stripe_customers, payment_methods, teams, team_members, usage_records, invoices, credit_balances, subscription_events, dunning_attempts, stripe_events) and RLS policies
+- [X] T009 Use Supabase MCP apply_migration to run the migration
 - [ ] T010 Use Supabase MCP generate_typescript_types to create updated type definitions in src/types/supabase.ts
 - [ ] T011 [P] Create billing types in src/types/billing.ts (Plan, Subscription, Invoice, TeamMember, UsageRecord, SubscriptionEvent)
 - [ ] T012 [P] Use context7 to fetch Stripe SDK documentation for Customer creation, then implement Stripe client singleton in src/lib/billing/stripe.ts

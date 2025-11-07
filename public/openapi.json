@@ -51,6 +51,10 @@
     {
       "name": "Usage",
       "description": "Quota and usage tracking"
+    },
+    {
+      "name": "Billing",
+      "description": "Subscription billing and payment management (Stripe integration)"
     }
   ],
   "security": [
@@ -1397,6 +1401,171 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/billing/webhook": {
+      "post": {
+        "summary": "Stripe webhook handler",
+        "description": "Receives and processes webhook events from Stripe for subscription lifecycle management.\n\nThis endpoint handles the following events:\n- `checkout.session.completed` - Checkout session completed\n- `customer.subscription.created` - New subscription created\n- `customer.subscription.updated` - Subscription updated (plan change, status change)\n- `customer.subscription.deleted` - Subscription canceled\n- `customer.subscription.trial_will_end` - Trial ending soon (7 days before)\n- `invoice.payment_succeeded` - Payment successful\n- `invoice.payment_failed` - Payment failed (triggers dunning)\n- `invoice.finalized` - Invoice generated\n\n**Security**: This endpoint verifies the Stripe webhook signature using the `Stripe-Signature` header. No authentication is required, but the webhook secret must be configured correctly.\n\n**Idempotency**: Events are deduplicated using the `stripe_events` table to prevent duplicate processing. Stripe may send the same event multiple times (~25% of events are retries).\n\n**Testing**: Use Stripe CLI to test locally:\n```bash\nstripe listen --forward-to localhost:3000/api/v1/billing/webhook\nstripe trigger customer.subscription.created\n```",
+        "operationId": "handleStripeWebhook",
+        "tags": ["Billing"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "Stripe-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Webhook signature for verification (automatically added by Stripe)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Raw Stripe webhook event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique event ID (used for idempotency)"
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Event type (e.g., 'customer.subscription.created')",
+                    "enum": [
+                      "checkout.session.completed",
+                      "customer.subscription.created",
+                      "customer.subscription.updated",
+                      "customer.subscription.deleted",
+                      "customer.subscription.trial_will_end",
+                      "invoice.payment_succeeded",
+                      "invoice.payment_failed",
+                      "invoice.finalized"
+                    ]
+                  },
+                  "data": {
+                    "type": "object",
+                    "description": "Event data (varies by event type)"
+                  },
+                  "api_version": {
+                    "type": "string",
+                    "description": "Stripe API version"
+                  },
+                  "created": {
+                    "type": "integer",
+                    "description": "Unix timestamp when event was created"
+                  }
+                },
+                "required": ["id", "type", "data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully (or duplicate detected)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "processed": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "True if event was processed, false if duplicate"
+                    },
+                    "duplicate": {
+                      "type": "boolean",
+                      "example": false,
+                      "description": "True if event was already processed (idempotency)"
+                    },
+                    "handled": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "False if event type is not handled by this application"
+                    }
+                  }
+                },
+                "examples": {
+                  "processed": {
+                    "summary": "Event processed successfully",
+                    "value": {
+                      "received": true,
+                      "processed": true
+                    }
+                  },
+                  "duplicate": {
+                    "summary": "Duplicate event (already processed)",
+                    "value": {
+                      "received": true,
+                      "duplicate": true
+                    }
+                  },
+                  "unhandled": {
+                    "summary": "Event type not handled",
+                    "value": {
+                      "received": true,
+                      "handled": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid Stripe-Signature header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "BAD_REQUEST",
+                  "message": "Missing Stripe-Signature header",
+                  "statusCode": 400
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Webhook signature verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Invalid webhook signature",
+                  "statusCode": 401
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Webhook processing error (Stripe will retry)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to process webhook event",
+                  "statusCode": 500
+                }
+              }
+            }
           }
         }
       }

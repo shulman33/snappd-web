@@ -46,19 +46,19 @@ Using Next.js 15 App Router structure:
 - [X] T007 Use Supabase MCP to review existing database schema
 - [X] T008 Create a migration with all 11 tables (subscriptions, stripe_customers, payment_methods, teams, team_members, usage_records, invoices, credit_balances, subscription_events, dunning_attempts, stripe_events) and RLS policies
 - [X] T009 Use Supabase MCP apply_migration to run the migration
-- [ ] T010 Use Supabase MCP generate_typescript_types to create updated type definitions in src/types/supabase.ts
-- [ ] T011 [P] Create billing types in src/types/billing.ts (Plan, Subscription, Invoice, TeamMember, UsageRecord, SubscriptionEvent)
-- [ ] T012 [P] Use context7 to fetch Stripe SDK documentation for Customer creation, then implement Stripe client singleton in src/lib/billing/stripe.ts
-- [ ] T013 [P] Use context7 to fetch Stripe webhook signature verification documentation, then implement webhook processing utilities in src/lib/billing/webhook.ts (verifyWebhookSignature, handleWebhookEvent)
-- [ ] T014 Create POST /api/v1/billing/webhook route in app/api/v1/billing/webhook/route.ts with webhook signature verification and idempotency
-- [ ] T015 Update public/openapi.json to add /api/v1/billing/webhook endpoint definition
-- [ ] T016 [P] Use Supabase MCP execute_sql to verify stripe_events table idempotency, then test webhook idempotency by inserting duplicate event IDs
-- [ ] T017 Use Supabase MCP list_tables to verify all billing tables created correctly
-- [ ] T018 Use Supabase MCP get_advisors for security and performance recommendations after schema changes
-- [ ] T019 [P] Use context7 to fetch Stripe Checkout Session documentation, then implement session creation helpers in src/lib/billing/subscription.ts (createCheckoutSession, getOrCreateStripeCustomer)
-- [ ] T020 [P] Implement quota checking utilities in src/lib/billing/quota.ts (checkUploadQuota, getUsageForPeriod, resetMonthlyUsage)
+- [X] T010 Use Supabase MCP generate_typescript_types to create updated type definitions in src/types/supabase.ts
+- [X] T011 [P] Create billing types in src/types/billing.ts (Plan, Subscription, Invoice, TeamMember, UsageRecord, SubscriptionEvent)
+- [X] T012 [P] Use context7 to fetch Stripe SDK documentation for Customer creation, then implement Stripe client singleton in src/lib/billing/stripe.ts
+- [X] T013 [P] Use context7 to fetch Stripe webhook signature verification documentation, then implement webhook processing utilities in src/lib/billing/webhook.ts (verifyWebhookSignature, handleWebhookEvent)
+- [X] T014 Create POST /api/v1/billing/webhook route in app/api/v1/billing/webhook/route.ts with webhook signature verification and idempotency
+- [X] T015 Update public/openapi.json to add /api/v1/billing/webhook endpoint definition
+- [X] T016 [P] Use Supabase MCP execute_sql to verify stripe_events table idempotency, then test webhook idempotency by inserting duplicate event IDs
+- [X] T017 Use Supabase MCP list_tables to verify all billing tables created correctly
+- [X] T018 Use Supabase MCP get_advisors for security and performance recommendations after schema changes
+- [X] T019 [P] Use context7 to fetch Stripe Checkout Session documentation, then implement session creation helpers in src/lib/billing/subscription.ts (createCheckoutSession, getOrCreateStripeCustomer)
+- [X] T020 [P] Implement quota checking utilities in src/lib/billing/quota.ts (checkUploadQuota, getUsageForPeriod, resetMonthlyUsage)
 
-**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+**Checkpoint**: ✅ Foundation ready - user story implementation can now begin in parallel
 
 ---
 

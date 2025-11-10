@@ -2309,19 +2309,93 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "type": "object",
+              "required": ["error", "message", "statusCode", "quota"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "MONTHLY_UPLOAD_LIMIT_EXCEEDED"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Monthly upload limit of 10 reached. Upgrade to Pro for unlimited uploads."
+                },
+                "statusCode": {
+                  "type": "integer",
+                  "example": 403
+                },
+                "quota": {
+                  "type": "object",
+                  "required": ["current", "limit", "plan"],
+                  "properties": {
+                    "current": {
+                      "type": "integer",
+                      "description": "Current usage count",
+                      "example": 10
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "Quota limit (null = unlimited)",
+                      "example": 10
+                    },
+                    "unit": {
+                      "type": "string",
+                      "example": "uploads"
+                    },
+                    "plan": {
+                      "type": "string",
+                      "enum": ["free", "pro", "team"],
+                      "description": "User's current plan",
+                      "example": "free"
+                    },
+                    "remaining": {
+                      "type": "integer",
+                      "nullable": true,
+                      "description": "Remaining quota (null = unlimited, 0 = quota exceeded)",
+                      "example": 0
+                    },
+                    "resetAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When quota resets (ISO 8601)",
+                      "example": "2025-12-01T00:00:00.000Z"
+                    }
+                  }
+                },
+                "upgrade": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Upgrade to Pro for unlimited uploads"
+                    },
+                    "plan": {
+                      "type": "string",
+                      "example": "pro"
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": "/pricing"
+                    }
+                  }
+                }
+              }
             },
             "example": {
-              "error": "QUOTA_EXCEEDED",
-              "message": "You've reached your monthly limit of 10 screenshots. Upgrade to Pro for unlimited uploads.",
+              "error": "MONTHLY_UPLOAD_LIMIT_EXCEEDED",
+              "message": "Monthly upload limit of 10 reached. Upgrade to Pro for unlimited uploads.",
               "statusCode": 403,
               "quota": {
                 "current": 10,
                 "limit": 10,
-                "unit": "uploads"
+                "unit": "uploads",
+                "plan": "free",
+                "remaining": 0,
+                "resetAt": "2025-12-01T00:00:00.000Z"
               },
               "upgrade": {
-                "message": "Upgrade to Pro",
+                "message": "Upgrade to Pro for unlimited uploads",
                 "plan": "pro",
                 "url": "/pricing"
               }

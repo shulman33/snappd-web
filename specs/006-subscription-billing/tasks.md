@@ -98,19 +98,19 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 6
 
-- [ ] T036 [P] [US6] Review existing upload initialization route at app/api/v1/upload/init/route.ts to understand current quota checking
-- [ ] T037 [US6] Use context7 to fetch Supabase trigger documentation, then implement monthly usage tracking trigger in existing migration to auto-increment screenshot_count
-- [ ] T038 [US6] Enhance quota checking in POST /api/v1/upload/init route to query subscription status and enforce plan-based limits (free=10, pro=unlimited)
-- [ ] T039 [US6] Add upgrade prompt to quota exceeded error response with plan information and upgrade URL
-- [ ] T040 [US6] Update public/openapi.json to extend upload init error responses with quota information and upgrade details
-- [ ] T041 [US6] Implement customer.subscription.updated webhook handler to update profiles.plan when subscription plan changes
-- [ ] T042 [US6] Implement customer.subscription.deleted webhook handler to revert user to free plan and enforce free tier quotas
-- [ ] T043 [US6] Use Supabase MCP execute_sql to test quota trigger by inserting test screenshots, then verify monthly_usage.screenshot_count increments correctly
-- [ ] T044 [US6] Use Supabase MCP execute_sql to set user quota to 10/10, then test quota enforcement: 10th upload succeeds, 11th fails with upgrade message
-- [ ] T045 [US6] Use Supabase MCP execute_sql to update user plan to 'pro', then verify quota check allows unlimited uploads
-- [ ] T046 [US6] Implement monthly quota reset logic triggered by billing cycle renewal (customer.subscription.updated webhook with period change)
+- [X] T036 [P] [US6] Review existing upload initialization route at app/api/v1/upload/init/route.ts to understand current quota checking
+- [X] T037 [US6] Use context7 to fetch Supabase trigger documentation, then implement monthly usage tracking trigger in existing migration to auto-increment screenshot_count
+- [X] T038 [US6] Enhance quota checking in POST /api/v1/upload/init route to query subscription status and enforce plan-based limits (free=10, pro=unlimited)
+- [X] T039 [US6] Add upgrade prompt to quota exceeded error response with plan information and upgrade URL
+- [X] T040 [US6] Update public/openapi.json to extend upload init error responses with quota information and upgrade details
+- [X] T041 [US6] Implement customer.subscription.updated webhook handler to update profiles.plan when subscription plan changes
+- [X] T042 [US6] Implement customer.subscription.deleted webhook handler to revert user to free plan and enforce free tier quotas
+- [X] T043 [US6] Use Supabase MCP execute_sql to test quota trigger by inserting test screenshots, then verify monthly_usage.screenshot_count increments correctly
+- [X] T044 [US6] Use Supabase MCP execute_sql to set user quota to 10/10, then test quota enforcement: 10th upload succeeds, 11th fails with upgrade message
+- [X] T045 [US6] Use Supabase MCP execute_sql to update user plan to 'pro', then verify quota check allows unlimited uploads
+- [X] T046 [US6] Implement monthly quota reset logic triggered by billing cycle renewal (customer.subscription.updated webhook with period change)
 
-**Checkpoint**: Quota system enforcing limits and driving upgrade path
+**Checkpoint**: ✅ Quota system enforcing limits and driving upgrade path
 
 ---
 

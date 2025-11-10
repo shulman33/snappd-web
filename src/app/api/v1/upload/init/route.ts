@@ -13,7 +13,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import { checkUploadQuota } from '@/lib/uploads/quota'
+import { checkUploadQuota as checkUploadQuotaOld } from '@/lib/uploads/quota'
+import { checkUploadQuota, getQuotaInfo } from '@/lib/billing/quota'
 import { generateFilePath, createSignedUploadUrl } from '@/lib/uploads/storage'
 import { hashPassword, validatePasswordStrength } from '@/lib/uploads/security'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -134,7 +135,7 @@ async function handleBatchUpload(
     )
   }
 
-  // Check quota for all files
+  // Check quota for all files using billing-aware quota checker
   const quotaCheck = await checkUploadQuota(userId)
   const allowedMimeTypes = [
     'image/png',
@@ -145,21 +146,25 @@ async function handleBatchUpload(
   ]
 
   // Calculate how many files can be uploaded based on remaining quota
-  const remainingQuota = quotaCheck.remaining
+  const remainingQuota = quotaCheck.limit === null
+    ? files.length
+    : Math.max(0, quotaCheck.limit - quotaCheck.currentUsage)
   const requestedCount = files.length
 
-  if (!quotaCheck.canUpload) {
+  if (!quotaCheck.allowed) {
     return NextResponse.json(
       {
         error: 'Monthly upload quota exceeded',
         quota: {
           plan: quotaCheck.plan,
           limit: quotaCheck.limit,
-          used: quotaCheck.used,
-          remaining: 0
+          current: quotaCheck.currentUsage,
+          remaining: 0,
+          resetAt: quotaCheck.resetAt
         },
         upgrade: {
           message: 'Upgrade to Pro for unlimited uploads',
+          plan: 'pro',
           url: '/pricing'
         }
       },
@@ -310,8 +315,11 @@ async function handleBatchUpload(
       quota: {
         plan: quotaCheck.plan,
         limit: quotaCheck.limit,
-        used: quotaCheck.used,
-        remaining: quotaCheck.remaining - successfulUploads.length
+        current: quotaCheck.currentUsage + successfulUploads.length,
+        remaining: quotaCheck.limit === null
+          ? null
+          : Math.max(0, quotaCheck.limit - quotaCheck.currentUsage - successfulUploads.length),
+        resetAt: quotaCheck.resetAt
       }
     },
     { status: successfulUploads.length > 0 ? 200 : 500 }
@@ -420,16 +428,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check upload quota
+    // Check upload quota using billing-aware quota checker
     const quotaCheck = await checkUploadQuota(user.id)
 
-    if (!quotaCheck.canUpload) {
+    if (!quotaCheck.allowed) {
       return ApiErrorHandler.quotaExceeded(
         ApiErrorCode.MONTHLY_UPLOAD_LIMIT_EXCEEDED,
-        'Monthly upload quota exceeded',
+        quotaCheck.reason || 'Monthly upload quota exceeded',
         {
-          current: quotaCheck.used,
-          limit: quotaCheck.limit,
+          current: quotaCheck.currentUsage,
+          limit: quotaCheck.limit || -1,
           unit: 'uploads'
         },
         {
@@ -444,7 +452,8 @@ export async function POST(request: NextRequest) {
     logger.debug('Quota check passed', request, {
       userId: user.id,
       plan: quotaCheck.plan,
-      remaining: quotaCheck.remaining
+      currentUsage: quotaCheck.currentUsage,
+      limit: quotaCheck.limit
     });
 
     // Generate storage path
@@ -517,8 +526,11 @@ export async function POST(request: NextRequest) {
         quota: {
           plan: quotaCheck.plan,
           limit: quotaCheck.limit,
-          used: quotaCheck.used,
-          remaining: quotaCheck.remaining
+          current: quotaCheck.currentUsage,
+          remaining: quotaCheck.limit === null
+            ? null
+            : Math.max(0, quotaCheck.limit - quotaCheck.currentUsage),
+          resetAt: quotaCheck.resetAt
         }
       },
       'Upload session initialized successfully'

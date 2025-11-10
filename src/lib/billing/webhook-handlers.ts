@@ -264,6 +264,40 @@ export async function handleSubscriptionUpdated(event: Stripe.Event) {
     newStatus: subscription.status,
   })
 
+  // Detect billing period renewal (monthly quota reset)
+  const periodChanged =
+    existingSubscription.current_period_start !== new Date(currentPeriodStart * 1000).toISOString()
+
+  if (periodChanged && subscription.status === 'active') {
+    logger.info('Billing period renewed, resetting monthly quota', undefined, {
+      subscriptionId: subscription.id,
+      userId: existingSubscription.user_id,
+      oldPeriodStart: existingSubscription.current_period_start,
+      newPeriodStart: new Date(currentPeriodStart * 1000).toISOString(),
+    })
+
+    // Create new usage record for the new billing period
+    const { error: usageError } = await supabase
+      .from('usage_records')
+      .insert({
+        user_id: existingSubscription.user_id,
+        period_start: new Date(currentPeriodStart * 1000).toISOString(),
+        period_end: new Date(currentPeriodEnd * 1000).toISOString(),
+        screenshot_count: 0,
+        storage_bytes: 0,
+        bandwidth_bytes: 0,
+      })
+
+    if (usageError) {
+      logger.warn('Failed to create new usage record for billing period', undefined, {
+        error: usageError,
+        subscriptionId: subscription.id,
+        userId: existingSubscription.user_id,
+      })
+      // Don't throw - usage record creation failure shouldn't fail the webhook
+    }
+  }
+
   // Create subscription event audit log
   const { error: eventError } = await supabase.from('subscription_events').insert({
     subscription_id: existingSubscription.id,

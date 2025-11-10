@@ -50,6 +50,67 @@ export interface QuotaCheckResult {
 }
 
 /**
+ * Get user's effective plan based on subscription status
+ *
+ * Checks the user's active subscription to determine their current plan.
+ * Returns the plan from the subscription if active, otherwise falls back to profile plan.
+ *
+ * @param userId - Supabase user ID
+ * @returns Effective plan and subscription status
+ */
+export async function getUserPlan(userId: string): Promise<{
+  plan: 'free' | 'pro' | 'team';
+  subscriptionStatus?: string;
+  isTrialing?: boolean;
+  isPastDue?: boolean;
+}> {
+  const supabase = createServiceClient();
+
+  // Get user's profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('plan')
+    .eq('id', userId)
+    .single();
+
+  // Check for active subscription
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('plan_type, status, trial_end')
+    .eq('user_id', userId)
+    .in('status', ['trialing', 'active', 'past_due'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (subscription) {
+    const isPastDue = subscription.status === 'past_due';
+    const isTrialing = subscription.status === 'trialing';
+    const now = new Date();
+    const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : null;
+
+    // Allow access during grace period (14 days after payment failure)
+    // or during active trial
+    const hasAccess =
+      subscription.status === 'active' ||
+      subscription.status === 'trialing' ||
+      (isPastDue && trialEnd && trialEnd > now); // Grace period
+
+    return {
+      plan: hasAccess ? (subscription.plan_type as 'pro' | 'team') : 'free',
+      subscriptionStatus: subscription.status,
+      isTrialing,
+      isPastDue,
+    };
+  }
+
+  // No active subscription, use profile plan (likely 'free')
+  return {
+    plan: (profile?.plan || 'free') as 'free' | 'pro' | 'team',
+  };
+}
+
+/**
  * Check if user can upload based on their plan quota
  *
  * Verifies the user hasn't exceeded their monthly upload limit.
@@ -81,22 +142,8 @@ export async function checkUploadQuota(userId: string): Promise<QuotaCheckResult
 
     logger.info('Checking upload quota', undefined, { userId });
 
-    // Get user's current plan
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('plan')
-      .eq('id', userId)
-      .single();
-
-    if (profileError || !profile) {
-      logger.error('Failed to fetch user profile for quota check', undefined, {
-        error: profileError,
-        userId,
-      });
-      throw new Error('Could not fetch user profile');
-    }
-
-    const plan = (profile.plan || 'free') as 'free' | 'pro' | 'team';
+    // Get user's effective plan based on subscription status
+    const { plan, subscriptionStatus, isTrialing, isPastDue } = await getUserPlan(userId);
     const planQuota = PLAN_QUOTAS[plan];
 
     // Pro and Team plans have unlimited uploads

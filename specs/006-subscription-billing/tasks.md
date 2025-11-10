@@ -77,14 +77,14 @@ Using Next.js 15 App Router structure:
 - [X] T025 [US1] Add 14-day trial configuration to Checkout Session with payment_method_collection='always' and trial_settings.end_behavior.missing_payment_method='cancel'
 - [X] T026 [P] [US1] Use context7 to fetch Stripe webhook event types documentation, then implement checkout.session.completed webhook handler in src/lib/billing/webhook.ts
 - [X] T027 [US1] Implement customer.subscription.created webhook handler in webhook route to create subscription record in database
-- [ ] T028 [US1] Use Supabase MCP execute_sql to verify subscription record creation, then test complete checkout flow: create session → complete payment → verify webhook processing
-- [ ] T029 [P] [US1] Create GET /api/v1/billing/subscription route in app/api/v1/billing/subscription/route.ts to return current subscription details
-- [ ] T030 [US1] Update public/openapi.json to add /api/v1/billing/subscription endpoint
-- [ ] T031 [US1] Implement feature access control in src/lib/billing/quota.ts to check subscription status and return quota limits based on plan
-- [ ] T032 [US1] Update existing GET /api/v1/auth/user/usage route to include subscription plan and quota limits in response
-- [ ] T033 [US1] Update public/openapi.json to extend /api/v1/auth/user/usage response schema with subscription information
-- [ ] T034 [US1] Use Supabase MCP execute_sql to test quota changes after subscription creation, then verify immediate quota update when subscription activates
-- [ ] T035 [US1] Use Stripe CLI to test webhook with stripe listen --forward-to localhost:3000/api/v1/billing/webhook and verify event processing
+- [X] T028 [US1] Use Supabase MCP execute_sql to verify subscription record creation, then test complete checkout flow: create session → complete payment → verify webhook processing
+- [X] T029 [P] [US1] Create GET /api/v1/billing/subscription route in app/api/v1/billing/subscription/route.ts to return current subscription details
+- [X] T030 [US1] Update public/openapi.json to add /api/v1/billing/subscription endpoint
+- [X] T031 [US1] Implement feature access control in src/lib/billing/quota.ts to check subscription status and return quota limits based on plan
+- [X] T032 [US1] Update existing GET /api/v1/auth/user/usage route to include subscription plan and quota limits in response
+- [X] T033 [US1] Update public/openapi.json to extend /api/v1/auth/user/usage response schema with subscription information
+- [X] T034 [US1] Use Supabase MCP execute_sql to test quota changes after subscription creation, then verify immediate quota update when subscription activates
+- [X] T035 [US1] Use Stripe CLI to test webhook with stripe listen --forward-to localhost:3000/api/v1/billing/webhook and verify event processing
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - users can upgrade to Pro and immediately access premium features
 

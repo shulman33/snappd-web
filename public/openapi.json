@@ -620,12 +620,12 @@
     "/auth/user/usage": {
       "get": {
         "summary": "Get user quota usage",
-        "description": "Returns current month's usage statistics including screenshot count, storage, and bandwidth.",
+        "description": "Returns current month's usage statistics including screenshot count, storage, bandwidth, and subscription information.\n\n**Free Tier**: Returns usage with limited quotas (10 screenshots/month).\n\n**Pro/Team Plans**: Returns usage with unlimited quotas and active subscription details including trial status and billing period.\n\n**Subscription Info**: For users with active subscriptions, includes subscription status, trial information, and current billing period.",
         "operationId": "getUserUsage",
         "tags": ["Usage"],
         "responses": {
           "200": {
-            "description": "Usage statistics",
+            "description": "Usage statistics with subscription information",
             "content": {
               "application/json": {
                 "schema": {
@@ -634,27 +634,133 @@
                     "plan": {
                       "type": "string",
                       "enum": ["free", "pro", "team"],
-                      "example": "free"
+                      "example": "free",
+                      "description": "Current plan based on subscription status"
                     },
                     "currentMonth": {
                       "type": "string",
-                      "example": "2025-11"
+                      "example": "2025-11",
+                      "description": "Current month in YYYY-MM format"
                     },
                     "screenshotCount": {
                       "type": "integer",
-                      "example": 7
+                      "example": 7,
+                      "description": "Number of screenshots uploaded this month"
                     },
                     "screenshotLimit": {
                       "type": ["integer", "null"],
                       "example": 10,
-                      "description": "null for unlimited (pro/team)"
+                      "description": "Monthly screenshot limit (null = unlimited)"
                     },
                     "storageBytes": {
                       "type": "integer",
-                      "example": 52428800
+                      "example": 52428800,
+                      "description": "Total storage used in bytes"
                     },
                     "storageLimitBytes": {
-                      "type": ["integer", "null"]
+                      "type": ["integer", "null"],
+                      "description": "Storage limit in bytes (null = unlimited)"
+                    },
+                    "bandwidthBytes": {
+                      "type": "integer",
+                      "example": 104857600,
+                      "description": "Total bandwidth used in bytes"
+                    },
+                    "bandwidthLimitBytes": {
+                      "type": ["integer", "null"],
+                      "description": "Bandwidth limit in bytes (null = unlimited)"
+                    },
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "null",
+                          "description": "No active subscription (free tier)"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": ["trialing", "active", "past_due"],
+                              "description": "Current subscription status"
+                            },
+                            "isTrialing": {
+                              "type": "boolean",
+                              "description": "Whether subscription is in trial period"
+                            },
+                            "isPastDue": {
+                              "type": "boolean",
+                              "description": "Whether subscription payment is past due"
+                            },
+                            "trialEnd": {
+                              "type": ["string", "null"],
+                              "format": "date-time",
+                              "description": "Trial end date (null if not in trial)"
+                            },
+                            "currentPeriodEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "End of current billing period"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "freeUser": {
+                    "summary": "Free tier user",
+                    "value": {
+                      "plan": "free",
+                      "currentMonth": "2025-11",
+                      "screenshotCount": 7,
+                      "screenshotLimit": 10,
+                      "storageBytes": 52428800,
+                      "storageLimitBytes": null,
+                      "bandwidthBytes": 104857600,
+                      "bandwidthLimitBytes": null,
+                      "subscription": null
+                    }
+                  },
+                  "proUserTrialing": {
+                    "summary": "Pro user in trial period",
+                    "value": {
+                      "plan": "pro",
+                      "currentMonth": "2025-11",
+                      "screenshotCount": 50,
+                      "screenshotLimit": null,
+                      "storageBytes": 524288000,
+                      "storageLimitBytes": null,
+                      "bandwidthBytes": 1048576000,
+                      "bandwidthLimitBytes": null,
+                      "subscription": {
+                        "status": "trialing",
+                        "isTrialing": true,
+                        "isPastDue": false,
+                        "trialEnd": "2025-11-15T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z"
+                      }
+                    }
+                  },
+                  "proUserActive": {
+                    "summary": "Pro user with active subscription",
+                    "value": {
+                      "plan": "pro",
+                      "currentMonth": "2025-11",
+                      "screenshotCount": 150,
+                      "screenshotLimit": null,
+                      "storageBytes": 1073741824,
+                      "storageLimitBytes": null,
+                      "bandwidthBytes": 2147483648,
+                      "bandwidthLimitBytes": null,
+                      "subscription": {
+                        "status": "active",
+                        "isTrialing": false,
+                        "isPastDue": false,
+                        "trialEnd": null,
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z"
+                      }
                     }
                   }
                 }
@@ -1662,6 +1768,250 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/billing/subscription": {
+      "get": {
+        "summary": "Get current subscription",
+        "description": "Returns the authenticated user's current subscription details, including plan type, billing cycle, trial status, and quota limits.\n\n**Free Tier**: Users without an active subscription receive free tier information with limited quotas.\n\n**Active Subscription**: Returns full subscription details including:\n- Subscription status (trialing, active, past_due)\n- Current billing period\n- Trial end date (if applicable)\n- Seat count (for team plans)\n- Plan-based quota limits\n\n**Use Cases**:\n- Display subscription info in user dashboard\n- Check plan limits before feature access\n- Show upgrade prompts for free users\n- Display trial countdown",
+        "operationId": "getCurrentSubscription",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription details (or free tier if no subscription)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "null",
+                          "description": "No active subscription (free tier)"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "description": "Internal subscription record ID"
+                            },
+                            "stripeSubscriptionId": {
+                              "type": "string",
+                              "description": "Stripe subscription ID"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": ["trialing", "active", "past_due", "canceled", "suspended"],
+                              "description": "Current subscription status"
+                            },
+                            "currentPeriodStart": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "Start of current billing period"
+                            },
+                            "currentPeriodEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "End of current billing period"
+                            },
+                            "trialEnd": {
+                              "type": ["string", "null"],
+                              "format": "date-time",
+                              "description": "Trial end date (null if not in trial)"
+                            },
+                            "cancelAtPeriodEnd": {
+                              "type": "boolean",
+                              "description": "Whether subscription will cancel at period end"
+                            },
+                            "canceledAt": {
+                              "type": ["string", "null"],
+                              "format": "date-time",
+                              "description": "When subscription was canceled (null if not canceled)"
+                            },
+                            "seatCount": {
+                              "type": ["integer", "null"],
+                              "description": "Number of seats (team plans only)"
+                            },
+                            "teamId": {
+                              "type": ["string", "null"],
+                              "format": "uuid",
+                              "description": "Team ID (team plans only)"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "When subscription was created"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["free", "pro", "team"],
+                          "description": "Plan type"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Human-readable plan name"
+                        },
+                        "billingCycle": {
+                          "type": ["string", "null"],
+                          "enum": ["monthly", "annual", null],
+                          "description": "Billing cycle (null for free tier)"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Plan status"
+                        },
+                        "quotas": {
+                          "type": "object",
+                          "properties": {
+                            "screenshots": {
+                              "type": ["integer", "null"],
+                              "description": "Screenshot upload limit (null = unlimited)"
+                            },
+                            "storage": {
+                              "type": ["integer", "null"],
+                              "description": "Storage limit in bytes (null = unlimited)"
+                            },
+                            "bandwidth": {
+                              "type": ["integer", "null"],
+                              "description": "Bandwidth limit in bytes (null = unlimited)"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "freeTier": {
+                    "summary": "Free tier user (no subscription)",
+                    "value": {
+                      "subscription": null,
+                      "plan": {
+                        "type": "free",
+                        "name": "Free",
+                        "billingCycle": null,
+                        "status": "active",
+                        "quotas": {
+                          "screenshots": 10,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  },
+                  "proTrialing": {
+                    "summary": "Pro plan in trial period",
+                    "value": {
+                      "subscription": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "stripeSubscriptionId": "sub_1AbCdEfGhIjKlMnO",
+                        "status": "trialing",
+                        "currentPeriodStart": "2025-11-01T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z",
+                        "trialEnd": "2025-11-15T00:00:00Z",
+                        "cancelAtPeriodEnd": false,
+                        "canceledAt": null,
+                        "seatCount": null,
+                        "teamId": null,
+                        "createdAt": "2025-11-01T00:00:00Z"
+                      },
+                      "plan": {
+                        "type": "pro",
+                        "name": "Pro",
+                        "billingCycle": "monthly",
+                        "status": "trialing",
+                        "quotas": {
+                          "screenshots": null,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  },
+                  "proActive": {
+                    "summary": "Active Pro plan subscription",
+                    "value": {
+                      "subscription": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "stripeSubscriptionId": "sub_1AbCdEfGhIjKlMnO",
+                        "status": "active",
+                        "currentPeriodStart": "2025-11-01T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z",
+                        "trialEnd": null,
+                        "cancelAtPeriodEnd": false,
+                        "canceledAt": null,
+                        "seatCount": null,
+                        "teamId": null,
+                        "createdAt": "2025-10-15T00:00:00Z"
+                      },
+                      "plan": {
+                        "type": "pro",
+                        "name": "Pro",
+                        "billingCycle": "monthly",
+                        "status": "active",
+                        "quotas": {
+                          "screenshots": null,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  },
+                  "teamActive": {
+                    "summary": "Active Team plan subscription",
+                    "value": {
+                      "subscription": {
+                        "id": "660e8400-e29b-41d4-a716-446655440001",
+                        "stripeSubscriptionId": "sub_1ZyXwVuTsRqPoNmL",
+                        "status": "active",
+                        "currentPeriodStart": "2025-11-01T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z",
+                        "trialEnd": null,
+                        "cancelAtPeriodEnd": false,
+                        "canceledAt": null,
+                        "seatCount": 5,
+                        "teamId": "770e8400-e29b-41d4-a716-446655440002",
+                        "createdAt": "2025-10-01T00:00:00Z"
+                      },
+                      "plan": {
+                        "type": "team",
+                        "name": "Team",
+                        "billingCycle": "monthly",
+                        "status": "active",
+                        "quotas": {
+                          "screenshots": null,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }

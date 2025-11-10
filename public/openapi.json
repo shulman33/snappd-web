@@ -1405,6 +1405,102 @@
         }
       }
     },
+    "/billing/create-checkout": {
+      "post": {
+        "summary": "Create Stripe Checkout session",
+        "description": "Creates a Stripe Checkout session for plan upgrades.\n\n**Features**:\n- Supports Pro and Team plan subscriptions\n- Configures 14-day free trial with payment method required\n- Handles monthly and annual billing cycles\n- Automatic proration for team seat management\n- Returns Checkout session URL for client redirect\n\n**Plan Types**:\n- `pro`: Individual plan ($9/month or $90/year)\n- `team`: Team plan ($9/user/month or $90/user/year, minimum 3 seats)\n\n**Free Trial**: All subscriptions include a 14-day free trial. Payment method is required but won't be charged until the trial ends. If no payment method is added by the trial end, the subscription is canceled automatically.\n\n**Usage**:\n1. Call this endpoint to create a Checkout session\n2. Redirect the user to the returned `url`\n3. User completes payment on Stripe's hosted page\n4. Stripe redirects back to your `successUrl` or `cancelUrl`\n5. Webhook processes the completed checkout and activates subscription",
+        "operationId": "createCheckoutSession",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["planType"],
+                "properties": {
+                  "planType": {
+                    "type": "string",
+                    "enum": ["pro", "team"],
+                    "description": "Plan type to subscribe to"
+                  },
+                  "billingCycle": {
+                    "type": "string",
+                    "enum": ["monthly", "annual"],
+                    "default": "monthly",
+                    "description": "Billing cycle (defaults to monthly)"
+                  },
+                  "seatCount": {
+                    "type": "integer",
+                    "minimum": 3,
+                    "description": "Number of seats (required for team plans, minimum 3)"
+                  },
+                  "successUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect to after successful checkout (optional, defaults to /billing/success)"
+                  },
+                  "cancelUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect to if checkout is canceled (optional, defaults to /billing/canceled)"
+                  }
+                },
+                "example": {
+                  "planType": "pro",
+                  "billingCycle": "monthly"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string",
+                      "description": "Stripe Checkout session ID",
+                      "example": "cs_test_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Checkout session URL to redirect user to",
+                      "example": "https://checkout.stripe.com/c/pay/cs_test_..."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the checkout session expires",
+                      "example": "2025-11-08T12:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/billing/webhook": {
       "post": {
         "summary": "Stripe webhook handler",

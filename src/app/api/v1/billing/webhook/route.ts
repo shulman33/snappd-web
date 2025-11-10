@@ -18,6 +18,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature, handleWebhookEvent, isHandledEvent } from '@/lib/billing/webhook';
+import {
+  handleCheckoutSessionCompleted,
+  handleSubscriptionCreated,
+  handleSubscriptionUpdated,
+  handleSubscriptionDeleted,
+} from '@/lib/billing/webhook-handlers';
 import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
 import { ApiResponse } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
@@ -93,23 +99,19 @@ export async function POST(request: NextRequest) {
       // Route to appropriate handler based on event type
       switch (event.type) {
         case 'checkout.session.completed':
-          // TODO: Implement in User Story 1 (T027)
-          logger.info('Checkout session completed', request, { eventId: event.id });
+          await handleCheckoutSessionCompleted(event);
           break;
 
         case 'customer.subscription.created':
-          // TODO: Implement in User Story 1 (T027)
-          logger.info('Subscription created', request, { eventId: event.id });
+          await handleSubscriptionCreated(event);
           break;
 
         case 'customer.subscription.updated':
-          // TODO: Implement in multiple stories (T041, T056, T092, etc.)
-          logger.info('Subscription updated', request, { eventId: event.id });
+          await handleSubscriptionUpdated(event);
           break;
 
         case 'customer.subscription.deleted':
-          // TODO: Implement in User Story 5 (T106)
-          logger.info('Subscription deleted', request, { eventId: event.id });
+          await handleSubscriptionDeleted(event);
           break;
 
         case 'customer.subscription.trial_will_end':

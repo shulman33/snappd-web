@@ -70,13 +70,13 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 1
 
-- [ ] T021 [P] [US1] Review project structure to understand existing quota enforcement in upload routes
-- [ ] T022 [P] [US1] Use context7 to fetch Stripe Checkout documentation for subscription mode, then create POST /api/v1/billing/create-checkout route in app/api/v1/billing/create-checkout/route.ts
-- [ ] T023 [US1] Update public/openapi.json to add /api/v1/billing/create-checkout endpoint with plan type and billing cycle parameters
-- [ ] T024 [US1] Implement plan selection logic with Stripe Price ID lookup based on plan type (pro/team) and billing cycle (monthly/annual) in create-checkout route
-- [ ] T025 [US1] Add 14-day trial configuration to Checkout Session with payment_method_collection='always' and trial_settings.end_behavior.missing_payment_method='cancel'
-- [ ] T026 [P] [US1] Use context7 to fetch Stripe webhook event types documentation, then implement checkout.session.completed webhook handler in src/lib/billing/webhook.ts
-- [ ] T027 [US1] Implement customer.subscription.created webhook handler in webhook route to create subscription record in database
+- [X] T021 [P] [US1] Review project structure to understand existing quota enforcement in upload routes
+- [X] T022 [P] [US1] Use context7 to fetch Stripe Checkout documentation for subscription mode, then create POST /api/v1/billing/create-checkout route in app/api/v1/billing/create-checkout/route.ts
+- [X] T023 [US1] Update public/openapi.json to add /api/v1/billing/create-checkout endpoint with plan type and billing cycle parameters
+- [X] T024 [US1] Implement plan selection logic with Stripe Price ID lookup based on plan type (pro/team) and billing cycle (monthly/annual) in create-checkout route
+- [X] T025 [US1] Add 14-day trial configuration to Checkout Session with payment_method_collection='always' and trial_settings.end_behavior.missing_payment_method='cancel'
+- [X] T026 [P] [US1] Use context7 to fetch Stripe webhook event types documentation, then implement checkout.session.completed webhook handler in src/lib/billing/webhook.ts
+- [X] T027 [US1] Implement customer.subscription.created webhook handler in webhook route to create subscription record in database
 - [ ] T028 [US1] Use Supabase MCP execute_sql to verify subscription record creation, then test complete checkout flow: create session → complete payment → verify webhook processing
 - [ ] T029 [P] [US1] Create GET /api/v1/billing/subscription route in app/api/v1/billing/subscription/route.ts to return current subscription details
 - [ ] T030 [US1] Update public/openapi.json to add /api/v1/billing/subscription endpoint

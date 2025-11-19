@@ -45,61 +45,10 @@ export const stripe = new Stripe(STRIPE_SECRET_KEY, {
 });
 
 /**
- * Get or create a Stripe customer for a user
- *
- * @param userId - Supabase user ID
- * @param email - User email address
- * @param name - Optional user full name
- * @returns Stripe Customer object
+ * NOTE: For customer creation/lookup, use getOrCreateStripeCustomer from
+ * '@/lib/billing/subscription' instead. That implementation uses database-first
+ * lookup for better performance and data consistency.
  */
-export async function getOrCreateStripeCustomer(
-  userId: string,
-  email: string,
-  name?: string | null
-): Promise<Stripe.Customer> {
-  try {
-    // Search for existing customer by email and verify user ID in metadata
-    const existingCustomers = await stripe.customers.list({
-      email,
-      limit: 1,
-    });
-
-    // Verify the customer belongs to this user by checking metadata
-    if (
-      existingCustomers.data.length > 0 &&
-      existingCustomers.data[0].metadata?.supabase_user_id === userId
-    ) {
-      logger.info('Found existing Stripe customer', undefined, {
-        customerId: existingCustomers.data[0].id,
-        userId,
-      });
-      return existingCustomers.data[0];
-    }
-
-    // Create new customer
-    const customer = await stripe.customers.create({
-      email,
-      name: name ?? undefined,
-      metadata: {
-        supabase_user_id: userId,
-      },
-    });
-
-    logger.info('Created new Stripe customer', undefined, {
-      customerId: customer.id,
-      userId,
-    });
-
-    return customer;
-  } catch (error) {
-    logger.error('Failed to get or create Stripe customer', undefined, {
-      error,
-      userId,
-      email,
-    });
-    throw error;
-  }
-}
 
 /**
  * Stripe price IDs for each plan and billing cycle

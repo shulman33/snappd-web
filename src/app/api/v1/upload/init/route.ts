@@ -13,8 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import { checkUploadQuota as checkUploadQuotaOld } from '@/lib/uploads/quota'
-import { checkUploadQuota, getQuotaInfo } from '@/lib/billing/quota'
+import { checkUploadQuota } from '@/lib/billing/quota'
 import { generateFilePath, createSignedUploadUrl } from '@/lib/uploads/storage'
 import { hashPassword, validatePasswordStrength } from '@/lib/uploads/security'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -122,16 +121,16 @@ async function handleBatchUpload(
 
   // Validate batch request
   if (!files || files.length === 0) {
-    return NextResponse.json(
-      { error: 'No files provided in batch upload request' },
-      { status: 400 }
+    return ApiErrorHandler.badRequest(
+      ApiErrorCode.VALIDATION_ERROR,
+      'No files provided in batch upload request'
     )
   }
 
   if (files.length > 50) {
-    return NextResponse.json(
-      { error: 'Batch upload limited to 50 files at a time' },
-      { status: 400 }
+    return ApiErrorHandler.badRequest(
+      ApiErrorCode.VALIDATION_ERROR,
+      'Batch upload limited to 50 files at a time'
     )
   }
 
@@ -298,32 +297,34 @@ async function handleBatchUpload(
       }
     })
 
-  // Return response with partial success information
-  return NextResponse.json(
-    {
-      batchId: `batch-${Date.now()}`,
-      totalRequested: requestedCount,
-      totalProcessed: filesToProcess.length,
-      successCount: successfulUploads.length,
-      failedCount: failedUploads.length,
-      uploads: successfulUploads,
-      failures: failedUploads,
-      partialSuccess,
-      ...(partialSuccess && {
-        warning: `Only ${remainingQuota} of ${requestedCount} files could be uploaded due to quota limits. Upgrade to Pro for unlimited uploads.`
-      }),
-      quota: {
-        plan: quotaCheck.plan,
-        limit: quotaCheck.limit,
-        current: quotaCheck.currentUsage + successfulUploads.length,
-        remaining: quotaCheck.limit === null
-          ? null
-          : Math.max(0, quotaCheck.limit - quotaCheck.currentUsage - successfulUploads.length),
-        resetAt: quotaCheck.resetAt
-      }
-    },
-    { status: successfulUploads.length > 0 ? 200 : 500 }
-  )
+  // Return response with partial success information using ApiResponse for consistency
+  const responseData = {
+    batchId: `batch-${Date.now()}`,
+    totalRequested: requestedCount,
+    totalProcessed: filesToProcess.length,
+    successCount: successfulUploads.length,
+    failedCount: failedUploads.length,
+    uploads: successfulUploads,
+    failures: failedUploads,
+    partialSuccess,
+    ...(partialSuccess && {
+      warning: `Only ${remainingQuota} of ${requestedCount} files could be uploaded due to quota limits. Upgrade to Pro for unlimited uploads.`
+    }),
+    quota: {
+      plan: quotaCheck.plan,
+      limit: quotaCheck.limit,
+      current: quotaCheck.currentUsage + successfulUploads.length,
+      remaining: quotaCheck.limit === null
+        ? null
+        : Math.max(0, quotaCheck.limit - quotaCheck.currentUsage - successfulUploads.length),
+      resetAt: quotaCheck.resetAt
+    }
+  }
+
+  // Use appropriate status: 200 for any success, 500 for complete failure
+  const status = successfulUploads.length > 0 ? 200 : 500
+
+  return ApiResponse.success(responseData, undefined, status)
 }
 
 export async function POST(request: NextRequest) {

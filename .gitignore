@@ -66,6 +66,8 @@ playwright/.cache/
 cookies.txt
 magic_cookies.txt
 
+backups/*.sql
+
 *.png
 *.jpg
 *.jpeg

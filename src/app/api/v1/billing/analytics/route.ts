@@ -24,6 +24,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors'
 import { ApiResponse } from '@/lib/api/response'
 import { logger } from '@/lib/logger'
+import { isAdmin } from '@/lib/auth/admin'
 import { z } from 'zod'
 import {
   getSubscriptionAnalytics,
@@ -81,9 +82,26 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Note: In production, you should add role-based access control
-    // to restrict analytics access to admins only
-    // Example: Check user.app_metadata.role === 'admin'
+    // Check for admin role
+    if (!isAdmin(user)) {
+      logger.warn('Unauthorized analytics access attempt', request, {
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.app_metadata?.role || 'none'
+      })
+
+      return ApiErrorHandler.forbidden(
+        ApiErrorCode.FORBIDDEN,
+        'Admin access required to view analytics',
+        undefined,
+        request
+      )
+    }
+
+    logger.info('Admin analytics access granted', request, {
+      userId: user.id,
+      userEmail: user.email
+    })
 
     // Parse query parameters
     const { searchParams } = new URL(request.url)

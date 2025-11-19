@@ -23,6 +23,7 @@ import {
   handleSubscriptionCreated,
   handleSubscriptionUpdated,
   handleSubscriptionDeleted,
+  handleTrialWillEnd,
   handleInvoiceFinalized,
   handleInvoicePaymentSucceeded,
 } from '@/lib/billing/webhook-handlers';
@@ -117,8 +118,7 @@ export async function POST(request: NextRequest) {
           break;
 
         case 'customer.subscription.trial_will_end':
-          // TODO: Implement in Phase 11 (T152)
-          logger.info('Trial ending soon', request, { eventId: event.id });
+          await handleTrialWillEnd(event);
           break;
 
         case 'invoice.payment_succeeded':

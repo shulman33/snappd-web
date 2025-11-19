@@ -2597,6 +2597,115 @@
           }
         }
       }
+    },
+    "/billing/analytics": {
+      "get": {
+        "summary": "Get subscription analytics",
+        "description": "Retrieve subscription metrics and revenue analytics for business decision-making.\n\n**Available Metrics**:\n- `mrr` - Monthly Recurring Revenue (cents)\n- `arr` - Annual Recurring Revenue (cents)\n- `activeSubscriptions` - Count of active subscriptions\n- `trialSubscriptions` - Count of trialing subscriptions\n- `churnedSubscriptions` - Count of canceled subscriptions in period\n- `conversionRate` - Free to paid conversion rate (%)\n- `churnRate` - Monthly churn rate (%)\n- `averageRevenuePerUser` - ARPU in cents\n- `lifetimeValue` - Estimated LTV in cents\n- `paymentSuccessRate` - Payment success rate (%)\n- `dunningRecoveryRate` - Dunning recovery rate (%)\n- `revenueByPlan` - Revenue breakdown by plan type\n- `subscriptionsByPlan` - Subscription counts by plan type\n\n**Date Range**: Default is last 30 days. Use `startDate` and `endDate` to customize.",
+        "operationId": "getSubscriptionAnalytics",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Start of date range for analytics (ISO 8601). Default: 30 days ago",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "End of date range for analytics (ISO 8601). Default: now",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "metrics",
+            "in": "query",
+            "description": "Comma-separated list of metrics to include. If not specified, all metrics are returned.",
+            "schema": {
+              "type": "string",
+              "example": "mrr,arr,conversionRate,churnRate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionAnalyticsResponse"
+                },
+                "examples": {
+                  "fullAnalytics": {
+                    "summary": "Full analytics response",
+                    "value": {
+                      "mrr": 45000,
+                      "arr": 540000,
+                      "activeSubscriptions": 42,
+                      "trialSubscriptions": 8,
+                      "churnedSubscriptions": 3,
+                      "conversionRate": 8.5,
+                      "churnRate": 2.1,
+                      "averageRevenuePerUser": 900,
+                      "lifetimeValue": 42857,
+                      "paymentSuccessRate": 97.5,
+                      "dunningRecoveryRate": 35.0,
+                      "revenueByPlan": {
+                        "free": 0,
+                        "pro": 36000,
+                        "team": 9000
+                      },
+                      "subscriptionsByPlan": {
+                        "free": 0,
+                        "pro": 40,
+                        "team": 2
+                      },
+                      "dateRange": {
+                        "startDate": "2025-10-19T00:00:00.000Z",
+                        "endDate": "2025-11-18T23:59:59.999Z"
+                      },
+                      "generatedAt": "2025-11-18T12:00:00.000Z"
+                    }
+                  },
+                  "selectMetrics": {
+                    "summary": "Selected metrics only",
+                    "value": {
+                      "mrr": 45000,
+                      "conversionRate": 8.5,
+                      "churnRate": 2.1,
+                      "dateRange": {
+                        "startDate": "2025-10-19T00:00:00.000Z",
+                        "endDate": "2025-11-18T23:59:59.999Z"
+                      },
+                      "generatedAt": "2025-11-18T12:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2857,6 +2966,126 @@
             }
           }
         ]
+      },
+      "SubscriptionAnalyticsResponse": {
+        "type": "object",
+        "description": "Subscription analytics and revenue metrics",
+        "properties": {
+          "mrr": {
+            "type": "integer",
+            "description": "Monthly Recurring Revenue in cents",
+            "example": 45000
+          },
+          "arr": {
+            "type": "integer",
+            "description": "Annual Recurring Revenue in cents",
+            "example": 540000
+          },
+          "activeSubscriptions": {
+            "type": "integer",
+            "description": "Count of active subscriptions",
+            "example": 42
+          },
+          "trialSubscriptions": {
+            "type": "integer",
+            "description": "Count of trialing subscriptions",
+            "example": 8
+          },
+          "churnedSubscriptions": {
+            "type": "integer",
+            "description": "Count of canceled subscriptions in period",
+            "example": 3
+          },
+          "conversionRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Free to paid conversion rate (%)",
+            "example": 8.5
+          },
+          "churnRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Monthly churn rate (%)",
+            "example": 2.1
+          },
+          "averageRevenuePerUser": {
+            "type": "integer",
+            "description": "Average Revenue Per User in cents",
+            "example": 900
+          },
+          "lifetimeValue": {
+            "type": "integer",
+            "description": "Estimated Lifetime Value in cents",
+            "example": 42857
+          },
+          "paymentSuccessRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Payment success rate (%)",
+            "example": 97.5
+          },
+          "dunningRecoveryRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Dunning recovery rate (%)",
+            "example": 35.0
+          },
+          "revenueByPlan": {
+            "type": "object",
+            "description": "Revenue breakdown by plan type (in cents)",
+            "properties": {
+              "free": {
+                "type": "integer",
+                "example": 0
+              },
+              "pro": {
+                "type": "integer",
+                "example": 36000
+              },
+              "team": {
+                "type": "integer",
+                "example": 9000
+              }
+            }
+          },
+          "subscriptionsByPlan": {
+            "type": "object",
+            "description": "Subscription counts by plan type",
+            "properties": {
+              "free": {
+                "type": "integer",
+                "example": 0
+              },
+              "pro": {
+                "type": "integer",
+                "example": 40
+              },
+              "team": {
+                "type": "integer",
+                "example": 2
+              }
+            }
+          },
+          "dateRange": {
+            "type": "object",
+            "description": "Date range for the analytics",
+            "properties": {
+              "startDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "endDate": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when analytics were generated"
+          }
+        }
       },
       "PaginationInfo": {
         "type": "object",

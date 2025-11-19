@@ -221,3 +221,173 @@ export type HandledWebhookEvent = (typeof HANDLED_WEBHOOK_EVENTS)[number];
 export function isHandledEvent(eventType: string): eventType is HandledWebhookEvent {
   return HANDLED_WEBHOOK_EVENTS.includes(eventType as HandledWebhookEvent);
 }
+
+/**
+ * Webhook retry configuration
+ *
+ * Stripe will automatically retry webhooks with exponential backoff:
+ * - Retries: Up to 3 times over 72 hours
+ * - Initial delay: ~1 hour
+ * - Max delay: ~48 hours
+ *
+ * @see https://stripe.com/docs/webhooks#retries
+ */
+export interface WebhookRetryConfig {
+  /** Maximum number of processing attempts */
+  maxAttempts: number;
+  /** Base delay in milliseconds for exponential backoff */
+  baseDelayMs: number;
+  /** Maximum delay in milliseconds */
+  maxDelayMs: number;
+}
+
+/**
+ * Default retry configuration for internal processing
+ */
+export const DEFAULT_RETRY_CONFIG: WebhookRetryConfig = {
+  maxAttempts: 3,
+  baseDelayMs: 1000, // 1 second
+  maxDelayMs: 30000, // 30 seconds
+};
+
+/**
+ * Calculate exponential backoff delay
+ *
+ * @param attempt - Current attempt number (0-indexed)
+ * @param config - Retry configuration
+ * @returns Delay in milliseconds
+ */
+export function calculateBackoffDelay(
+  attempt: number,
+  config: WebhookRetryConfig = DEFAULT_RETRY_CONFIG
+): number {
+  // Exponential backoff: delay = baseDelay * 2^attempt + jitter
+  const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
+  const jitter = Math.random() * 1000; // Add up to 1 second of jitter
+  return Math.min(exponentialDelay + jitter, config.maxDelayMs);
+}
+
+/**
+ * Sleep for a specified duration
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Process webhook event with retry logic
+ *
+ * Wraps an event handler with automatic retry on failure.
+ * Uses exponential backoff between retries.
+ *
+ * @param event - Verified Stripe event
+ * @param handler - Async function to process the event
+ * @param config - Retry configuration
+ * @returns Result from handler
+ * @throws Error if all retries fail
+ */
+export async function handleWebhookEventWithRetry<T>(
+  event: Stripe.Event,
+  handler: (event: Stripe.Event) => Promise<T>,
+  config: WebhookRetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<T> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < config.maxAttempts; attempt++) {
+    try {
+      if (attempt > 0) {
+        const delay = calculateBackoffDelay(attempt - 1, config);
+        logger.info(`Retrying webhook event (attempt ${attempt + 1}/${config.maxAttempts})`, undefined, {
+          eventId: event.id,
+          eventType: event.type,
+          delayMs: delay,
+        });
+        await sleep(delay);
+      }
+
+      const result = await handler(event);
+
+      if (attempt > 0) {
+        logger.info('Webhook event succeeded after retry', undefined, {
+          eventId: event.id,
+          eventType: event.type,
+          attempt: attempt + 1,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      logger.warn(`Webhook event processing attempt ${attempt + 1} failed`, undefined, {
+        eventId: event.id,
+        eventType: event.type,
+        attempt: attempt + 1,
+        error: lastError.message,
+      });
+
+      // Check if error is retryable
+      if (!isRetryableWebhookError(error)) {
+        logger.error('Non-retryable webhook error, aborting retries', undefined, {
+          eventId: event.id,
+          eventType: event.type,
+          error: lastError.message,
+        });
+        throw lastError;
+      }
+    }
+  }
+
+  // All retries exhausted
+  logger.error('Webhook event failed after all retries', undefined, {
+    eventId: event.id,
+    eventType: event.type,
+    maxAttempts: config.maxAttempts,
+    error: lastError?.message,
+  });
+
+  throw lastError || new Error('Webhook processing failed after all retries');
+}
+
+/**
+ * Check if an error is retryable
+ *
+ * Some errors should not be retried (e.g., validation errors, not found errors).
+ * Others (e.g., database connection, rate limits) should be retried.
+ */
+export function isRetryableWebhookError(error: unknown): boolean {
+  if (!error) return false;
+
+  // Don't retry validation or "not found" errors
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+
+    // Non-retryable errors
+    if (
+      message.includes('validation') ||
+      message.includes('invalid') ||
+      message.includes('not found') ||
+      message.includes('missing required') ||
+      message.includes('unauthorized') ||
+      message.includes('forbidden')
+    ) {
+      return false;
+    }
+
+    // Retryable errors
+    if (
+      message.includes('timeout') ||
+      message.includes('connection') ||
+      message.includes('network') ||
+      message.includes('rate limit') ||
+      message.includes('unavailable') ||
+      message.includes('temporary') ||
+      message.includes('retry')
+    ) {
+      return true;
+    }
+  }
+
+  // Default to retryable for unknown errors
+  return true;
+}

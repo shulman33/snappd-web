@@ -270,19 +270,19 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 8
 
-- [ ] T130 [P] [US8] Review project structure to understand existing analytics patterns
-- [ ] T131 [P] [US8] Use context7 to fetch PostgreSQL aggregation query documentation for revenue calculations
-- [ ] T132 [P] [US8] Implement analytics utilities in src/lib/billing/analytics.ts (calculateMRR, getActiveSubscriptions, getConversionRate, getChurnRate)
-- [ ] T133 [P] [US8] Create GET /api/v1/billing/analytics route in app/api/v1/billing/analytics/route.ts
-- [ ] T134 [US8] Update public/openapi.json to add /api/v1/billing/analytics endpoint with query parameters for date range and metrics
-- [ ] T135 [US8] Implement MRR calculation by aggregating active subscriptions with recurring charges
-- [ ] T136 [US8] Implement conversion rate calculation from subscription_events (free → paid transitions)
-- [ ] T137 [US8] Implement churn rate calculation from canceled subscriptions within time period
-- [ ] T138 [US8] Add payment success rate calculation from invoice payment status
-- [ ] T139 [US8] Add dunning recovery rate calculation from dunning_attempts table
-- [ ] T140 [US8] Use Supabase MCP execute_sql to verify analytics queries with GROUP BY and aggregate functions
-- [ ] T141 [US8] Use Supabase MCP execute_sql to insert test subscription events and verify conversion rate calculation
-- [ ] T142 [US8] Test analytics API with date range filters and verify results match manual calculations
+- [X] T130 [P] [US8] Review project structure to understand existing analytics patterns
+- [X] T131 [P] [US8] Use context7 to fetch PostgreSQL aggregation query documentation for revenue calculations
+- [X] T132 [P] [US8] Implement analytics utilities in src/lib/billing/analytics.ts (calculateMRR, getActiveSubscriptions, getConversionRate, getChurnRate)
+- [X] T133 [P] [US8] Create GET /api/v1/billing/analytics route in app/api/v1/billing/analytics/route.ts
+- [X] T134 [US8] Update public/openapi.json to add /api/v1/billing/analytics endpoint with query parameters for date range and metrics
+- [X] T135 [US8] Implement MRR calculation by aggregating active subscriptions with recurring charges
+- [X] T136 [US8] Implement conversion rate calculation from subscription_events (free → paid transitions)
+- [X] T137 [US8] Implement churn rate calculation from canceled subscriptions within time period
+- [X] T138 [US8] Add payment success rate calculation from invoice payment status
+- [X] T139 [US8] Add dunning recovery rate calculation from dunning_attempts table
+- [X] T140 [US8] Use Supabase MCP execute_sql to verify analytics queries with GROUP BY and aggregate functions
+- [X] T141 [US8] Use Supabase MCP execute_sql to insert test subscription events and verify conversion rate calculation
+- [X] T142 [US8] Test analytics API with date range filters and verify results match manual calculations
 
 **Checkpoint**: Analytics enable data-driven business optimization
 
@@ -293,18 +293,18 @@ Using Next.js 15 App Router structure:
 **Purpose**: Improvements that affect multiple user stories
 
 - [ ] T143 [P] Use Supabase MCP get_advisors with type='security' and type='performance' for final audit recommendations
-- [ ] T144 [P] Use context7 to fetch Next.js 15 error handling patterns, then add comprehensive error handling across all billing API routes
-- [ ] T145 [P] Use context7 to fetch structured logging best practices for Next.js, then implement logging for all billing operations using centralized logger from src/lib/logger.ts
-- [ ] T146 [P] Use context7 to fetch @upstash/ratelimit documentation, then add rate limiting to all billing endpoints (10 payment attempts/hour per user)
+- [X] T144 [P] Use context7 to fetch Next.js 15 error handling patterns, then add comprehensive error handling across all billing API routes
+- [X] T145 [P] Use context7 to fetch structured logging best practices for Next.js, then implement logging for all billing operations using centralized logger from src/lib/logger.ts
+- [X] T146 [P] Use context7 to fetch @upstash/ratelimit documentation, then add rate limiting to all billing endpoints (10 payment attempts/hour per user)
 - [ ] T147 Use Supabase MCP get_advisors with type='performance' to identify missing indexes, then optimize database queries with proper indexes on subscriptions.status, invoices.user_id, team_members.team_id
-- [ ] T148 [P] Use context7 to fetch Stripe webhook retry documentation, then add webhook retry handling with exponential backoff
+- [X] T148 [P] Use context7 to fetch Stripe webhook retry documentation, then add webhook retry handling with exponential backoff
 - [ ] T149 Use Supabase MCP list_tables to review all RLS policies on billing tables, then verify service role access for webhook processing
 - [ ] T150 [P] Use context7 to fetch OpenAPI validation tools documentation, then validate all billing routes against contracts/billing-api.yaml
 - [ ] T151 [P] Use Supabase MCP execute_sql to analyze webhook processing performance with EXPLAIN ANALYZE
-- [ ] T152 Use context7 to fetch Stripe subscription lifecycle best practices, then implement subscription.trial_will_end webhook handler to send trial ending reminder
-- [ ] T153 [P] Create trial ending email template in src/lib/email/templates/trial-ending.tsx
-- [ ] T154 [P] Create subscription created email template in src/lib/email/templates/subscription-created.tsx
-- [ ] T155 Implement customer.subscription.created webhook handler to send welcome email with subscription details
+- [X] T152 Use context7 to fetch Stripe subscription lifecycle best practices, then implement subscription.trial_will_end webhook handler to send trial ending reminder
+- [X] T153 [P] Create trial ending email template in src/lib/email/templates/trial-ending.tsx
+- [X] T154 [P] Create subscription created email template in src/lib/email/templates/subscription-created.tsx
+- [X] T155 Implement customer.subscription.created webhook handler to send welcome email with subscription details
 - [ ] T156 Verify all billing API routes are properly reflected in public/openapi.json with correct request/response schemas
 - [ ] T157 Use Stripe CLI to test complete subscription lifecycle: trial → active → past_due → active → canceled
 - [ ] T158 Use Supabase MCP execute_sql to verify all billing-related triggers fire correctly (quota updates, team seat sync, plan updates)

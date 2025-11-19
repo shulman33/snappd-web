@@ -9,6 +9,9 @@ import Stripe from 'stripe'
 import { createServiceClient } from '../supabase/service'
 import { logger } from '@/lib/logger'
 import { sendInvoiceEmail } from '@/lib/email/templates/invoice'
+import { sendTrialEndingEmail } from '@/lib/email/templates/trial-ending'
+import { sendSubscriptionCreatedEmail } from '@/lib/email/templates/subscription-created'
+import { getPlanPrice } from './stripe'
 
 /**
  * Handle checkout.session.completed event
@@ -185,6 +188,63 @@ export async function handleSubscriptionCreated(event: Stripe.Event) {
   // The profile plan update will happen automatically via the database trigger
   // (sync_profile_plan trigger updates profiles.plan when subscription status is active/trialing)
 
+  // Get user profile for email
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', userId)
+    .single()
+
+  if (profile?.email) {
+    // Send welcome email
+    try {
+      const isTrialing = subscription.status === 'trialing'
+      const planPrice = getPlanPrice(planType, billingCycle)
+      const features = getPlanFeatures(planType)
+
+      // Format dates
+      const formatDate = (timestamp: number) => {
+        return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+      await sendSubscriptionCreatedEmail(profile.email, {
+        userName: profile.full_name || undefined,
+        planName: planType === 'pro' ? 'Pro' : 'Team',
+        billingCycle,
+        price: planPrice,
+        trialEndDate: subscription.trial_end ? formatDate(subscription.trial_end) : undefined,
+        nextBillingDate: formatDate(currentPeriodEnd),
+        dashboardUrl: `${baseUrl}/dashboard`,
+        features,
+        isTrialing,
+      })
+
+      logger.info('Subscription welcome email sent', undefined, {
+        subscriptionId: subscription.id,
+        userId,
+        email: profile.email,
+      })
+    } catch (emailError) {
+      logger.error('Failed to send subscription welcome email', undefined, {
+        error: emailError,
+        subscriptionId: subscription.id,
+        userId,
+      })
+      // Don't throw - email failure shouldn't fail the webhook
+    }
+  } else if (profileError) {
+    logger.warn('Could not fetch user profile for welcome email', undefined, {
+      error: profileError,
+      userId,
+    })
+  }
+
   logger.info('Subscription created successfully', undefined, {
     subscriptionId: subscription.id,
     userId,
@@ -194,6 +254,29 @@ export async function handleSubscriptionCreated(event: Stripe.Event) {
   })
 
   return { processed: true, subscriptionRecordId: subscriptionRecord.id }
+}
+
+/**
+ * Get plan features for email template
+ */
+function getPlanFeatures(planType: 'pro' | 'team'): string[] {
+  if (planType === 'pro') {
+    return [
+      'Unlimited screenshots',
+      'Unlimited storage',
+      'No watermarks',
+      'Priority support',
+      'Advanced analytics',
+    ]
+  }
+
+  return [
+    'Everything in Pro',
+    'Team collaboration',
+    'Admin controls',
+    'Centralized billing',
+    'Custom branding',
+  ]
 }
 
 /**
@@ -462,6 +545,134 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
   // Profile plan will be automatically reverted to 'free' by the database trigger
 
   return { processed: true, dataRetentionUntil: dataRetentionUntil.toISOString() }
+}
+
+/**
+ * Handle customer.subscription.trial_will_end event
+ *
+ * This event fires 3 days before a trial ends.
+ * Sends a reminder email to encourage conversion to paid subscription.
+ *
+ * @param event - Stripe webhook event
+ */
+export async function handleTrialWillEnd(event: Stripe.Event) {
+  const subscription = event.data.object as Stripe.Subscription
+  const supabase = createServiceClient()
+
+  logger.info('Processing customer.subscription.trial_will_end', undefined, {
+    subscriptionId: subscription.id,
+    customerId: subscription.customer,
+    trialEnd: subscription.trial_end,
+  })
+
+  // Extract metadata
+  const userId = subscription.metadata?.supabase_user_id
+  const planType = subscription.metadata?.plan_type as 'pro' | 'team'
+
+  if (!userId || !planType) {
+    logger.error('Missing required metadata in subscription for trial ending', undefined, {
+      subscriptionId: subscription.id,
+      metadata: subscription.metadata,
+    })
+    throw new Error('Missing required metadata in subscription')
+  }
+
+  // Get user profile for email
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', userId)
+    .single()
+
+  if (profileError || !profile) {
+    logger.error('Could not find user for trial ending notification', undefined, {
+      subscriptionId: subscription.id,
+      userId,
+      error: profileError,
+    })
+    throw new Error('User not found for trial ending notification')
+  }
+
+  // Calculate days remaining
+  const trialEndTimestamp = subscription.trial_end || 0
+  const now = Math.floor(Date.now() / 1000)
+  const secondsRemaining = trialEndTimestamp - now
+  const daysRemaining = Math.max(1, Math.ceil(secondsRemaining / 86400))
+
+  // Format trial end date
+  const trialEndDate = new Date(trialEndTimestamp * 1000).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  // Send trial ending email
+  if (profile.email) {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const features = getPlanFeatures(planType)
+
+      await sendTrialEndingEmail(profile.email, {
+        userName: profile.full_name || undefined,
+        planName: planType === 'pro' ? 'Pro' : 'Team',
+        trialEndDate,
+        daysRemaining,
+        upgradeUrl: `${baseUrl}/billing`,
+        features,
+      })
+
+      logger.info('Trial ending email sent', undefined, {
+        subscriptionId: subscription.id,
+        userId,
+        email: profile.email,
+        daysRemaining,
+      })
+    } catch (emailError) {
+      logger.error('Failed to send trial ending email', undefined, {
+        error: emailError,
+        subscriptionId: subscription.id,
+        userId,
+      })
+      // Don't throw - email failure shouldn't fail the webhook
+    }
+  }
+
+  // Create subscription event audit log
+  const { data: subscriptionRecord } = await supabase
+    .from('subscriptions')
+    .select('id')
+    .eq('stripe_subscription_id', subscription.id)
+    .single()
+
+  if (subscriptionRecord) {
+    const { error: eventError } = await supabase.from('subscription_events').insert({
+      subscription_id: subscriptionRecord.id,
+      user_id: userId,
+      event_type: 'trial_ending',
+      new_status: subscription.status,
+      metadata: {
+        stripe_subscription_id: subscription.id,
+        trial_end: trialEndTimestamp,
+        days_remaining: daysRemaining,
+      },
+    })
+
+    if (eventError) {
+      logger.warn('Failed to create trial ending event log', undefined, {
+        error: eventError,
+        subscriptionId: subscription.id,
+      })
+    }
+  }
+
+  logger.info('Trial will end notification processed', undefined, {
+    subscriptionId: subscription.id,
+    userId,
+    daysRemaining,
+    trialEndDate,
+  })
+
+  return { processed: true, daysRemaining }
 }
 
 /**

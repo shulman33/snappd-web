@@ -143,6 +143,34 @@ export function getStripePriceId(
 }
 
 /**
+ * Plan prices for display (used in emails and UI)
+ */
+export const PLAN_PRICES = {
+  pro: {
+    monthly: '$9',
+    annual: '$90',
+  },
+  team: {
+    monthly: '$9',
+    annual: '$90',
+  },
+} as const;
+
+/**
+ * Get formatted plan price for display
+ *
+ * @param planType - 'pro' or 'team'
+ * @param billingCycle - 'monthly' or 'annual'
+ * @returns Formatted price string (e.g., '$9')
+ */
+export function getPlanPrice(
+  planType: 'pro' | 'team',
+  billingCycle: 'monthly' | 'annual'
+): string {
+  return PLAN_PRICES[planType][billingCycle];
+}
+
+/**
  * Webhook secret for signature verification
  */
 export const STRIPE_WEBHOOK_SECRET_VALUE = STRIPE_WEBHOOK_SECRET || '';

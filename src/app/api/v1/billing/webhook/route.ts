@@ -23,6 +23,8 @@ import {
   handleSubscriptionCreated,
   handleSubscriptionUpdated,
   handleSubscriptionDeleted,
+  handleInvoiceFinalized,
+  handleInvoicePaymentSucceeded,
 } from '@/lib/billing/webhook-handlers';
 import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
 import { ApiResponse } from '@/lib/api/response';
@@ -120,8 +122,7 @@ export async function POST(request: NextRequest) {
           break;
 
         case 'invoice.payment_succeeded':
-          // TODO: Implement in User Story 4 (T052) and User Story 7 (T121)
-          logger.info('Invoice payment succeeded', request, { eventId: event.id });
+          await handleInvoicePaymentSucceeded(event);
           break;
 
         case 'invoice.payment_failed':
@@ -130,8 +131,7 @@ export async function POST(request: NextRequest) {
           break;
 
         case 'invoice.finalized':
-          // TODO: Implement in User Story 7 (T118)
-          logger.info('Invoice finalized', request, { eventId: event.id });
+          await handleInvoiceFinalized(event);
           break;
 
         default:

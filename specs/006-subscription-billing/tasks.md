@@ -241,22 +241,22 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 7
 
-- [ ] T114 [P] [US7] Review project structure to understand existing email infrastructure
-- [ ] T115 [P] [US7] Use context7 to fetch Stripe Tax configuration documentation
-- [ ] T116 [US7] Configure Stripe Tax in Stripe Dashboard and enable automatic tax calculation for US and EU jurisdictions
-- [ ] T117 [US7] Enable tax_id_collection in Checkout Session creation for business customers
-- [ ] T118 [US7] Implement invoice.finalized webhook handler to create invoice record in invoices table
-- [ ] T119 [US7] Use context7 to fetch Stripe invoice PDF generation documentation, then implement PDF download URL storage in invoice record
-- [ ] T120 [P] [US7] Create email template for invoice delivery in src/lib/email/templates/invoice.tsx
-- [ ] T121 [US7] Implement invoice.payment_succeeded webhook handler to send invoice email with PDF attachment link
-- [ ] T122 [P] [US7] Create GET /api/v1/billing/invoices route in app/api/v1/billing/invoices/route.ts for listing user invoices
-- [ ] T123 [US7] Update public/openapi.json to add /api/v1/billing/invoices endpoint with pagination
-- [ ] T124 [P] [US7] Create GET /api/v1/billing/invoices/[invoiceId] route in app/api/v1/billing/invoices/[invoiceId]/route.ts
-- [ ] T125 [US7] Update public/openapi.json to add /api/v1/billing/invoices/:invoiceId endpoint
-- [ ] T126 [US7] Implement invoice filtering by date range and payment status in invoices list route
-- [ ] T127 [US7] Use Stripe test mode with test tax calculation to verify tax amount displayed before checkout
-- [ ] T128 [US7] Use Stripe test webhooks to simulate invoice.finalized and verify invoice record creation with tax breakdown
-- [ ] T129 [US7] Use Supabase MCP execute_sql to verify invoices table stores tax_amount and tax_rate correctly
+- [X] T114 [P] [US7] Review project structure to understand existing email infrastructure
+- [X] T115 [P] [US7] Use context7 to fetch Stripe Tax configuration documentation
+- [X] T116 [US7] Configure Stripe Tax in Stripe Dashboard and enable automatic tax calculation for US and EU jurisdictions
+- [X] T117 [US7] Enable tax_id_collection in Checkout Session creation for business customers
+- [X] T118 [US7] Implement invoice.finalized webhook handler to create invoice record in invoices table
+- [X] T119 [US7] Use context7 to fetch Stripe invoice PDF generation documentation, then implement PDF download URL storage in invoice record
+- [X] T120 [P] [US7] Create email template for invoice delivery in src/lib/email/templates/invoice.tsx
+- [X] T121 [US7] Implement invoice.payment_succeeded webhook handler to send invoice email with PDF attachment link
+- [X] T122 [P] [US7] Create GET /api/v1/billing/invoices route in app/api/v1/billing/invoices/route.ts for listing user invoices
+- [X] T123 [US7] Update public/openapi.json to add /api/v1/billing/invoices endpoint with pagination
+- [X] T124 [P] [US7] Create GET /api/v1/billing/invoices/[invoiceId] route in app/api/v1/billing/invoices/[invoiceId]/route.ts
+- [X] T125 [US7] Update public/openapi.json to add /api/v1/billing/invoices/:invoiceId endpoint
+- [X] T126 [US7] Implement invoice filtering by date range and payment status in invoices list route
+- [X] T127 [US7] Use Stripe test mode with test tax calculation to verify tax amount displayed before checkout
+- [X] T128 [US7] Use Stripe test webhooks to simulate invoice.finalized and verify invoice record creation with tax breakdown
+- [X] T129 [US7] Use Supabase MCP execute_sql to verify invoices table stores tax_amount and tax_rate correctly
 
 **Checkpoint**: Professional invoicing supports business customers and tax compliance
 

@@ -175,6 +175,14 @@ export async function POST(request: NextRequest) {
       cancel_url: cancelUrl || defaultCancelUrl,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
+      // Enable automatic tax calculation (Stripe Tax)
+      automatic_tax: {
+        enabled: true
+      },
+      // Enable tax ID collection for business customers
+      tax_id_collection: {
+        enabled: true
+      },
       subscription_data: {
         trial_period_days: 14,
         trial_settings: {

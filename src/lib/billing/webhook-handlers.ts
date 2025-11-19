@@ -8,6 +8,7 @@
 import Stripe from 'stripe'
 import { createServiceClient } from '../supabase/service'
 import { logger } from '@/lib/logger'
+import { sendInvoiceEmail } from '@/lib/email/templates/invoice'
 
 /**
  * Handle checkout.session.completed event
@@ -461,4 +462,247 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
   // Profile plan will be automatically reverted to 'free' by the database trigger
 
   return { processed: true, dataRetentionUntil: dataRetentionUntil.toISOString() }
+}
+
+/**
+ * Handle invoice.finalized event
+ *
+ * This event fires when an invoice is finalized and ready for payment.
+ * Creates an invoice record in our database with PDF download URL.
+ *
+ * @param event - Stripe webhook event
+ */
+export async function handleInvoiceFinalized(event: Stripe.Event) {
+  const invoice = event.data.object as Stripe.Invoice
+  const supabase = createServiceClient()
+
+  logger.info('Processing invoice.finalized', undefined, {
+    invoiceId: invoice.id,
+    customerId: invoice.customer,
+    subscriptionId: invoice.subscription,
+    total: invoice.total,
+  })
+
+  // Get user from Stripe customer ID
+  const customerId =
+    typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+
+  if (!customerId) {
+    logger.error('No customer ID on invoice', undefined, { invoiceId: invoice.id })
+    throw new Error('No customer ID on invoice')
+  }
+
+  // Find user by Stripe customer ID
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('stripe_customer_id', customerId)
+    .single()
+
+  if (profileError || !profile) {
+    logger.error('Could not find user for invoice', undefined, {
+      invoiceId: invoice.id,
+      customerId,
+      error: profileError,
+    })
+    throw new Error('User not found for invoice')
+  }
+
+  // Get subscription ID if applicable
+  const subscriptionId =
+    typeof invoice.subscription === 'string'
+      ? invoice.subscription
+      : invoice.subscription?.id
+
+  // Look up our internal subscription record
+  let internalSubscriptionId: string | null = null
+  if (subscriptionId) {
+    const { data: subscriptionRecord } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('stripe_subscription_id', subscriptionId)
+      .single()
+
+    internalSubscriptionId = subscriptionRecord?.id || null
+  }
+
+  // Extract line items
+  const lineItems = invoice.lines.data.map((line) => ({
+    description: line.description || 'Subscription',
+    quantity: line.quantity || 1,
+    unit_amount: line.price?.unit_amount || line.unit_amount_excluding_tax || 0,
+    amount: line.amount,
+  }))
+
+  // Insert invoice record
+  const { data: invoiceRecord, error: insertError } = await supabase
+    .from('invoices')
+    .insert({
+      user_id: profile.id,
+      subscription_id: internalSubscriptionId,
+      stripe_invoice_id: invoice.id,
+      stripe_hosted_invoice_url: invoice.hosted_invoice_url,
+      stripe_invoice_pdf: invoice.invoice_pdf,
+      invoice_number: invoice.number || `INV-${invoice.id.slice(-8).toUpperCase()}`,
+      status: invoice.status as 'draft' | 'open' | 'paid' | 'void' | 'uncollectible',
+      subtotal: invoice.subtotal,
+      tax: invoice.tax || 0,
+      total: invoice.total,
+      amount_paid: invoice.amount_paid,
+      amount_due: invoice.amount_due,
+      line_items: lineItems,
+      period_start: invoice.period_start
+        ? new Date(invoice.period_start * 1000).toISOString()
+        : new Date().toISOString(),
+      period_end: invoice.period_end
+        ? new Date(invoice.period_end * 1000).toISOString()
+        : new Date().toISOString(),
+      due_date: invoice.due_date
+        ? new Date(invoice.due_date * 1000).toISOString()
+        : null,
+    })
+    .select()
+    .single()
+
+  if (insertError || !invoiceRecord) {
+    logger.error('Failed to create invoice record', undefined, {
+      error: insertError,
+      invoiceId: invoice.id,
+      userId: profile.id,
+    })
+    throw insertError
+  }
+
+  logger.info('Invoice record created', undefined, {
+    invoiceId: invoice.id,
+    recordId: invoiceRecord.id,
+    userId: profile.id,
+    total: invoice.total,
+    tax: invoice.tax,
+  })
+
+  return { processed: true, invoiceRecordId: invoiceRecord.id }
+}
+
+/**
+ * Handle invoice.payment_succeeded event
+ *
+ * This event fires when an invoice payment is successful.
+ * Updates the invoice record and sends the invoice email with PDF link.
+ *
+ * @param event - Stripe webhook event
+ */
+export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
+  const invoice = event.data.object as Stripe.Invoice
+  const supabase = createServiceClient()
+
+  logger.info('Processing invoice.payment_succeeded', undefined, {
+    invoiceId: invoice.id,
+    customerId: invoice.customer,
+    total: invoice.total,
+  })
+
+  // Get user from Stripe customer ID
+  const customerId =
+    typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+
+  if (!customerId) {
+    logger.error('No customer ID on invoice', undefined, { invoiceId: invoice.id })
+    throw new Error('No customer ID on invoice')
+  }
+
+  // Find user profile with email
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, email, full_name')
+    .eq('stripe_customer_id', customerId)
+    .single()
+
+  if (profileError || !profile) {
+    logger.error('Could not find user for invoice', undefined, {
+      invoiceId: invoice.id,
+      customerId,
+      error: profileError,
+    })
+    throw new Error('User not found for invoice')
+  }
+
+  // Update invoice record to paid status
+  const { error: updateError } = await supabase
+    .from('invoices')
+    .update({
+      status: 'paid',
+      amount_paid: invoice.amount_paid,
+      amount_due: invoice.amount_due,
+      paid_at: new Date().toISOString(),
+    })
+    .eq('stripe_invoice_id', invoice.id)
+
+  if (updateError) {
+    logger.warn('Failed to update invoice status to paid', undefined, {
+      error: updateError,
+      invoiceId: invoice.id,
+    })
+    // Don't throw - continue to send email
+  }
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: invoice.currency?.toUpperCase() || 'USD',
+    }).format(amount / 100)
+  }
+
+  // Format date
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+
+  // Determine plan name from line items
+  const planName = invoice.lines.data[0]?.description || 'Snappd Subscription'
+
+  // Send invoice email
+  try {
+    if (profile.email && invoice.hosted_invoice_url && invoice.invoice_pdf) {
+      await sendInvoiceEmail(profile.email, {
+        invoiceNumber: invoice.number || `INV-${invoice.id.slice(-8).toUpperCase()}`,
+        invoiceUrl: invoice.hosted_invoice_url,
+        pdfUrl: invoice.invoice_pdf,
+        total: formatCurrency(invoice.total),
+        subtotal: formatCurrency(invoice.subtotal),
+        tax: invoice.tax ? formatCurrency(invoice.tax) : undefined,
+        periodStart: invoice.period_start ? formatDate(invoice.period_start) : '',
+        periodEnd: invoice.period_end ? formatDate(invoice.period_end) : '',
+        planName,
+        userName: profile.full_name || undefined,
+      })
+
+      logger.info('Invoice email sent', undefined, {
+        invoiceId: invoice.id,
+        userId: profile.id,
+        email: profile.email,
+      })
+    } else {
+      logger.warn('Could not send invoice email - missing data', undefined, {
+        invoiceId: invoice.id,
+        hasEmail: !!profile.email,
+        hasHostedUrl: !!invoice.hosted_invoice_url,
+        hasPdfUrl: !!invoice.invoice_pdf,
+      })
+    }
+  } catch (emailError) {
+    logger.error('Failed to send invoice email', undefined, {
+      error: emailError,
+      invoiceId: invoice.id,
+      userId: profile.id,
+    })
+    // Don't throw - email failure shouldn't fail the webhook
+  }
+
+  return { processed: true }
 }

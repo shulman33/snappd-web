@@ -2456,6 +2456,147 @@
           }
         }
       }
+    },
+    "/billing/invoices": {
+      "get": {
+        "summary": "List invoices",
+        "description": "Get paginated list of user's invoices with optional filtering by date range and status.",
+        "operationId": "listInvoices",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (default: 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by invoice status",
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "open", "paid", "void", "uncollectible"]
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Filter invoices created on or after this date (ISO 8601)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Filter invoices created on or before this date (ISO 8601)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationInfo"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/invoices/{invoiceId}": {
+      "get": {
+        "summary": "Get invoice details",
+        "description": "Get detailed information about a specific invoice including line items, tax breakdown, and PDF download URL.",
+        "operationId": "getInvoice",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "description": "Invoice ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2597,6 +2738,140 @@
             "type": "string",
             "format": "email",
             "example": "user@example.com"
+          }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "example": "INV-A1B2C3D4"
+          },
+          "stripeInvoiceId": {
+            "type": "string",
+            "description": "Stripe invoice ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "open", "paid", "void", "uncollectible"]
+          },
+          "subtotal": {
+            "type": "integer",
+            "description": "Subtotal in cents"
+          },
+          "tax": {
+            "type": "integer",
+            "description": "Tax amount in cents"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total amount in cents"
+          },
+          "amountPaid": {
+            "type": "integer",
+            "description": "Amount paid in cents"
+          },
+          "amountDue": {
+            "type": "integer",
+            "description": "Amount due in cents"
+          },
+          "currency": {
+            "type": "string",
+            "example": "usd"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dueDate": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "paidAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "hostedInvoiceUrl": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "URL to view invoice in browser"
+          },
+          "pdfUrl": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "URL to download invoice PDF"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InvoiceDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Invoice"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "subscriptionId": {
+                "type": ["string", "null"],
+                "format": "uuid"
+              },
+              "lineItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "integer"
+                    },
+                    "unit_amount": {
+                      "type": "integer",
+                      "description": "Unit amount in cents"
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "description": "Line item total in cents"
+                    }
+                  }
+                }
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "PaginationInfo": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
           }
         }
       },

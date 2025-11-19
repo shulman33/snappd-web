@@ -193,14 +193,14 @@ export async function POST(request: NextRequest) {
         metadata: {
           plan_type: planType,
           billing_cycle: billingCycle,
-          user_id: user.id,
+          supabase_user_id: user.id,
           ...(planType === 'team' && { seat_count: seatCount?.toString() })
         }
       },
       metadata: {
         plan_type: planType,
         billing_cycle: billingCycle,
-        user_id: user.id,
+        supabase_user_id: user.id,
         ...(planType === 'team' && { seat_count: seatCount?.toString() })
       }
     }

@@ -6,7 +6,7 @@
  */
 
 import Stripe from 'stripe';
-import { stripe } from './stripe';
+import { stripe, STRIPE_PRICE_IDS } from './stripe';
 import { createServiceClient } from '../supabase/service';
 import { logger } from '@/lib/logger';
 
@@ -98,21 +98,11 @@ export async function getOrCreateStripeCustomer(
 }
 
 /**
- * Plan configuration for Stripe Price IDs
+ * Re-export STRIPE_PRICE_IDS for backward compatibility
  *
- * These should be set via environment variables in production.
- * Create these products and prices in Stripe Dashboard first.
+ * @deprecated Use STRIPE_PRICE_IDS from '@/lib/billing/stripe' directly
  */
-export const PLAN_PRICE_IDS = {
-  pro: {
-    monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly',
-    annual: process.env.STRIPE_PRICE_PRO_ANNUAL || 'price_pro_annual',
-  },
-  team: {
-    monthly: process.env.STRIPE_PRICE_TEAM_MONTHLY || 'price_team_monthly',
-    annual: process.env.STRIPE_PRICE_TEAM_ANNUAL || 'price_team_annual',
-  },
-} as const;
+export { STRIPE_PRICE_IDS as PLAN_PRICE_IDS } from './stripe';
 
 /**
  * Checkout Session creation parameters
@@ -196,7 +186,7 @@ export async function createCheckoutSession(
     const customerId = await getOrCreateStripeCustomer(userId, email, name);
 
     // Get price ID based on plan and billing cycle
-    const priceId = PLAN_PRICE_IDS[planType][billingCycle];
+    const priceId = STRIPE_PRICE_IDS[planType][billingCycle];
 
     // Build line items
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [

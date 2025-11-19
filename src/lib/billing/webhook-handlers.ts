@@ -687,10 +687,18 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
   const invoice = event.data.object as Stripe.Invoice
   const supabase = createServiceClient()
 
+  // Extract subscription ID from parent.subscription_details (Stripe API 2025-03-31+)
+  const stripeSubscriptionId =
+    invoice.parent?.subscription_details?.subscription
+      ? typeof invoice.parent.subscription_details.subscription === 'string'
+        ? invoice.parent.subscription_details.subscription
+        : invoice.parent.subscription_details.subscription.id
+      : null
+
   logger.info('Processing invoice.finalized', undefined, {
     invoiceId: invoice.id,
     customerId: invoice.customer,
-    subscriptionId: invoice.subscription,
+    subscriptionId: stripeSubscriptionId,
     total: invoice.total,
   })
 
@@ -719,31 +727,30 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
     throw new Error('User not found for invoice')
   }
 
-  // Get subscription ID if applicable
-  const subscriptionId =
-    typeof invoice.subscription === 'string'
-      ? invoice.subscription
-      : invoice.subscription?.id
-
-  // Look up our internal subscription record
+  // Look up our internal subscription record using the extracted subscription ID
   let internalSubscriptionId: string | null = null
-  if (subscriptionId) {
+  if (stripeSubscriptionId) {
     const { data: subscriptionRecord } = await supabase
       .from('subscriptions')
       .select('id')
-      .eq('stripe_subscription_id', subscriptionId)
+      .eq('stripe_subscription_id', stripeSubscriptionId)
       .single()
 
     internalSubscriptionId = subscriptionRecord?.id || null
   }
 
-  // Extract line items
+  // Extract line items (Stripe API 2025-03-31+ uses pricing.unit_amount_decimal)
   const lineItems = invoice.lines.data.map((line) => ({
     description: line.description || 'Subscription',
     quantity: line.quantity || 1,
-    unit_amount: line.price?.unit_amount || line.unit_amount_excluding_tax || 0,
+    unit_amount: line.pricing?.unit_amount_decimal
+      ? Math.round(parseFloat(line.pricing.unit_amount_decimal) * 100)
+      : 0,
     amount: line.amount,
   }))
+
+  // Calculate total tax from total_taxes array (Stripe API 2025-03-31+)
+  const totalTax = invoice.total_taxes?.reduce((sum, tax) => sum + tax.amount, 0) || 0
 
   // Insert invoice record
   const { data: invoiceRecord, error: insertError } = await supabase
@@ -757,7 +764,7 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
       invoice_number: invoice.number || `INV-${invoice.id.slice(-8).toUpperCase()}`,
       status: invoice.status as 'draft' | 'open' | 'paid' | 'void' | 'uncollectible',
       subtotal: invoice.subtotal,
-      tax: invoice.tax || 0,
+      tax: totalTax,
       total: invoice.total,
       amount_paid: invoice.amount_paid,
       amount_due: invoice.amount_due,
@@ -789,7 +796,7 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
     recordId: invoiceRecord.id,
     userId: profile.id,
     total: invoice.total,
-    tax: invoice.tax,
+    tax: totalTax,
   })
 
   return { processed: true, invoiceRecordId: invoiceRecord.id }
@@ -877,6 +884,9 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   // Determine plan name from line items
   const planName = invoice.lines.data[0]?.description || 'Snappd Subscription'
 
+  // Calculate total tax from total_taxes array (Stripe API 2025-03-31+)
+  const totalTax = invoice.total_taxes?.reduce((sum, tax) => sum + tax.amount, 0) || 0
+
   // Send invoice email
   try {
     if (profile.email && invoice.hosted_invoice_url && invoice.invoice_pdf) {
@@ -886,7 +896,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
         pdfUrl: invoice.invoice_pdf,
         total: formatCurrency(invoice.total),
         subtotal: formatCurrency(invoice.subtotal),
-        tax: invoice.tax ? formatCurrency(invoice.tax) : undefined,
+        tax: totalTax ? formatCurrency(totalTax) : undefined,
         periodStart: invoice.period_start ? formatDate(invoice.period_start) : '',
         periodEnd: invoice.period_end ? formatDate(invoice.period_end) : '',
         planName,

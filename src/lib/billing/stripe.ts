@@ -6,23 +6,10 @@
  */
 
 import Stripe from 'stripe';
-import { logger } from '@/lib/logger';
-
-// Validate environment variables
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-
-if (!STRIPE_SECRET_KEY) {
-  throw new Error(
-    'Missing STRIPE_SECRET_KEY environment variable. Please add it to your .env file.'
-  );
-}
-
-if (!STRIPE_WEBHOOK_SECRET) {
-  logger.warn(
-    'Missing STRIPE_WEBHOOK_SECRET environment variable. Webhook signature verification will fail.'
-  );
-}
+import {
+  env,
+  STRIPE_PRICE_IDS as VALIDATED_STRIPE_PRICE_IDS,
+} from '@/lib/config/env';
 
 /**
  * Singleton Stripe client instance
@@ -33,7 +20,7 @@ if (!STRIPE_WEBHOOK_SECRET) {
  * - Idempotency: Automatic retry with idempotency keys
  * - Timeout: 80 seconds (Stripe default)
  */
-export const stripe = new Stripe(STRIPE_SECRET_KEY, {
+export const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
   typescript: true,
   maxNetworkRetries: 2, // Retry failed requests twice
   timeout: 80000, // 80 second timeout
@@ -53,19 +40,10 @@ export const stripe = new Stripe(STRIPE_SECRET_KEY, {
 /**
  * Stripe price IDs for each plan and billing cycle
  *
- * These should be set as environment variables and created in the Stripe Dashboard
- * or via the Stripe API during initial setup.
+ * These are validated at startup to ensure they are real Stripe Price IDs
+ * and not placeholder values. See src/lib/config/env.ts for validation.
  */
-export const STRIPE_PRICE_IDS = {
-  pro: {
-    monthly: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly_placeholder',
-    annual: process.env.STRIPE_PRICE_PRO_ANNUAL || 'price_pro_annual_placeholder',
-  },
-  team: {
-    monthly: process.env.STRIPE_PRICE_TEAM_MONTHLY || 'price_team_monthly_placeholder',
-    annual: process.env.STRIPE_PRICE_TEAM_ANNUAL || 'price_team_annual_placeholder',
-  },
-} as const;
+export const STRIPE_PRICE_IDS = VALIDATED_STRIPE_PRICE_IDS;
 
 /**
  * Get Stripe Price ID for a plan and billing cycle
@@ -78,17 +56,7 @@ export function getStripePriceId(
   planType: 'pro' | 'team',
   billingCycle: 'monthly' | 'annual'
 ): string {
-  const priceId = STRIPE_PRICE_IDS[planType][billingCycle];
-
-  if (priceId.includes('placeholder')) {
-    logger.warn('Using placeholder Stripe Price ID', undefined, {
-      planType,
-      billingCycle,
-      priceId,
-    });
-  }
-
-  return priceId;
+  return STRIPE_PRICE_IDS[planType][billingCycle];
 }
 
 /**
@@ -122,7 +90,7 @@ export function getPlanPrice(
 /**
  * Webhook secret for signature verification
  */
-export const STRIPE_WEBHOOK_SECRET_VALUE = STRIPE_WEBHOOK_SECRET || '';
+export const STRIPE_WEBHOOK_SECRET_VALUE = env.STRIPE_WEBHOOK_SECRET;
 
 /**
  * Export Stripe types for use throughout the application

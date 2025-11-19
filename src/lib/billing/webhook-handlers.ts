@@ -102,9 +102,8 @@ export async function handleSubscriptionCreated(event: Stripe.Event) {
   }
 
   // Get billing period from the subscription item
-  // Note: In Stripe API 2025-03-31+, billing periods moved to subscription items
-  const currentPeriodStart = (firstItem as any).current_period_start || subscription.billing_cycle_anchor
-  const currentPeriodEnd = (firstItem as any).current_period_end || subscription.billing_cycle_anchor
+  const currentPeriodStart = firstItem.current_period_start ?? subscription.billing_cycle_anchor
+  const currentPeriodEnd = firstItem.current_period_end ?? subscription.billing_cycle_anchor
 
   // Determine team_id if this is a team subscription
   let teamId: string | null = null
@@ -312,10 +311,9 @@ export async function handleSubscriptionUpdated(event: Stripe.Event) {
   }
 
   // Get billing period from the subscription item
-  // Note: In Stripe API 2025-03-31+, billing periods moved to subscription items
   const firstItem = subscription.items.data[0]
-  const currentPeriodStart = (firstItem as any)?.current_period_start || subscription.billing_cycle_anchor
-  const currentPeriodEnd = (firstItem as any)?.current_period_end || subscription.billing_cycle_anchor
+  const currentPeriodStart = firstItem?.current_period_start ?? subscription.billing_cycle_anchor
+  const currentPeriodEnd = firstItem?.current_period_end ?? subscription.billing_cycle_anchor
 
   // Update subscription record
   const { error: updateError } = await supabase

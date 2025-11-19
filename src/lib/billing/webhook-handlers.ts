@@ -298,23 +298,77 @@ export async function handleSubscriptionUpdated(event: Stripe.Event) {
     }
   }
 
-  // Create subscription event audit log
-  const { error: eventError } = await supabase.from('subscription_events').insert({
-    subscription_id: existingSubscription.id,
-    user_id: existingSubscription.user_id,
-    event_type: 'upgraded', // Will be refined in future stories
-    previous_status: existingSubscription.status,
-    new_status: subscription.status,
-    metadata: {
-      stripe_subscription_id: subscription.id,
-    },
-  })
+  // Detect plan downgrade (T092)
+  // When a user downgrades via Customer Portal, Stripe creates proration automatically
+  // and credits are applied to the customer's balance for future invoices
+  const newPlanType = subscription.metadata?.plan_type as 'pro' | 'team' | 'free' | undefined
+  const isPlanDowngrade =
+    newPlanType &&
+    existingSubscription.plan_type &&
+    ((existingSubscription.plan_type === 'team' && ['pro', 'free'].includes(newPlanType)) ||
+      (existingSubscription.plan_type === 'pro' && newPlanType === 'free'))
 
-  if (eventError) {
-    logger.warn('Failed to create subscription event log', undefined, {
-      error: eventError,
+  if (isPlanDowngrade) {
+    logger.info('Plan downgrade detected', undefined, {
       subscriptionId: subscription.id,
+      userId: existingSubscription.user_id,
+      oldPlan: existingSubscription.plan_type,
+      newPlan: newPlanType,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
     })
+
+    // When cancel_at_period_end is true, user maintains current plan until period ends
+    // Stripe automatically handles proration and credits the customer balance
+    // The credit will be applied to their next invoice automatically
+
+    // Note: We track downgrade scheduling but don't manually calculate credits
+    // Stripe's proration system handles this automatically when the subscription is updated
+    // Customer balance credits are applied via Stripe's invoice.created event
+
+    // Create subscription event for downgrade audit trail
+    await supabase.from('subscription_events').insert({
+      subscription_id: existingSubscription.id,
+      user_id: existingSubscription.user_id,
+      event_type: 'downgraded',
+      previous_plan: existingSubscription.plan_type,
+      new_plan: newPlanType,
+      previous_status: existingSubscription.status,
+      new_status: subscription.status,
+      metadata: {
+        stripe_subscription_id: subscription.id,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+        current_period_end: new Date(currentPeriodEnd * 1000).toISOString(),
+        scheduled_downgrade: subscription.cancel_at_period_end,
+      },
+    })
+
+    logger.info('Downgrade event logged', undefined, {
+      subscriptionId: subscription.id,
+      userId: existingSubscription.user_id,
+      scheduledFor: subscription.cancel_at_period_end
+        ? new Date(currentPeriodEnd * 1000).toISOString()
+        : 'immediate',
+    })
+  } else {
+    // Create subscription event audit log for non-downgrade updates
+    const { error: eventError } = await supabase.from('subscription_events').insert({
+      subscription_id: existingSubscription.id,
+      user_id: existingSubscription.user_id,
+      event_type: 'updated',
+      previous_status: existingSubscription.status,
+      new_status: subscription.status,
+      metadata: {
+        stripe_subscription_id: subscription.id,
+      },
+    })
+
+    if (eventError) {
+      logger.warn('Failed to create subscription event log', undefined, {
+        error: eventError,
+        subscriptionId: subscription.id,
+      })
+    }
   }
 
   return { processed: true }

@@ -7,6 +7,10 @@
     "contact": {
       "name": "Snappd API Support",
       "email": "support@snappd.io"
+    },
+    "license": {
+      "name": "Proprietary",
+      "identifier": "LicenseRef-Proprietary"
     }
   },
   "servers": [
@@ -1519,7 +1523,7 @@
         "tags": ["Billing"],
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -2015,6 +2019,180 @@
           }
         }
       }
+    },
+    "/billing/create-portal": {
+      "post": {
+        "summary": "Create Customer Portal session",
+        "description": "Creates a Stripe Customer Portal session for subscription management.\n\nThe Customer Portal allows authenticated users with active subscriptions to:\n- Manage subscription plans (upgrade/downgrade)\n- Update payment methods\n- View and download invoices\n- Cancel subscriptions\n- Access billing history\n\n**Requirements**: User must have an active Stripe customer ID (must have created at least one subscription).\n\n**Return URL**: After completing actions in the portal, users are redirected to the specified return URL (defaults to /billing).\n\n**Flows**: Optional flow_data parameter allows deep-linking to specific customer portal workflows:\n- `payment_method_update` - Add/update payment method\n- `subscription_cancel` - Cancel subscription\n- `subscription_update` - Change subscription plan\n- `subscription_update_confirm` - Confirm pre-configured plan change\n\n**Use Cases**:\n- \"Manage subscription\" button in user dashboard\n- \"Update payment method\" link after payment failure\n- \"Cancel subscription\" flow\n- Self-service plan changes (upgrade/downgrade)",
+        "operationId": "createCustomerPortalSession",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Portal session configuration",
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "returnUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect to after portal session (optional, defaults to /billing)",
+                    "example": "https://snappd.io/billing"
+                  },
+                  "flowData": {
+                    "type": "object",
+                    "description": "Optional flow configuration for deep-linking to specific workflows",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["payment_method_update", "subscription_cancel", "subscription_update", "subscription_update_confirm"],
+                        "description": "Type of customer portal workflow"
+                      },
+                      "subscriptionId": {
+                        "type": "string",
+                        "description": "Stripe subscription ID (required for subscription-related flows)",
+                        "example": "sub_1AbCdEfGhIjKlMnO"
+                      },
+                      "subscriptionUpdateConfirm": {
+                        "type": "object",
+                        "description": "Configuration for subscription_update_confirm flow",
+                        "properties": {
+                          "subscriptionId": {
+                            "type": "string",
+                            "description": "Stripe subscription ID",
+                            "example": "sub_1AbCdEfGhIjKlMnO"
+                          },
+                          "items": {
+                            "type": "array",
+                            "description": "New subscription items",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Subscription item ID",
+                                  "example": "si_1AbCdEfGhIjKlMnO"
+                                },
+                                "price": {
+                                  "type": "string",
+                                  "description": "New Stripe Price ID",
+                                  "example": "price_1AbCdEfGhIjKlMnO"
+                                },
+                                "quantity": {
+                                  "type": "integer",
+                                  "description": "New quantity",
+                                  "example": 5
+                                }
+                              },
+                              "required": ["id", "price"]
+                            }
+                          }
+                        },
+                        "required": ["subscriptionId"]
+                      }
+                    },
+                    "required": ["type"]
+                  }
+                }
+              },
+              "examples": {
+                "basicPortal": {
+                  "summary": "Basic portal session (no specific flow)",
+                  "value": {
+                    "returnUrl": "https://snappd.io/billing"
+                  }
+                },
+                "cancelFlow": {
+                  "summary": "Deep-link to subscription cancellation",
+                  "value": {
+                    "returnUrl": "https://snappd.io/billing",
+                    "flowData": {
+                      "type": "subscription_cancel",
+                      "subscriptionId": "sub_1AbCdEfGhIjKlMnO"
+                    }
+                  }
+                },
+                "updatePaymentMethod": {
+                  "summary": "Deep-link to payment method update",
+                  "value": {
+                    "returnUrl": "https://snappd.io/billing",
+                    "flowData": {
+                      "type": "payment_method_update"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customer Portal session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string",
+                      "description": "Stripe Customer Portal session ID",
+                      "example": "bps_1AbCdEfGhIjKlMnO"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "URL to redirect user to Customer Portal",
+                      "example": "https://billing.stripe.com/p/session/test_YWNjdF8xQWJDZEVmR2hJamtMbU5P"
+                    }
+                  },
+                  "required": ["sessionId", "url"]
+                },
+                "example": {
+                  "sessionId": "bps_1AbCdEfGhIjKlMnO",
+                  "url": "https://billing.stripe.com/p/session/test_YWNjdF8xQWJDZEVmR2hJamtMbU5P"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid parameters or no billing account found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": ["VALIDATION_ERROR", "BAD_REQUEST"],
+                      "example": "BAD_REQUEST"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "No billing account found. Please create a subscription first."
+                    },
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2334,8 +2512,7 @@
                       "example": 10
                     },
                     "limit": {
-                      "type": "integer",
-                      "nullable": true,
+                      "type": ["integer", "null"],
                       "description": "Quota limit (null = unlimited)",
                       "example": 10
                     },
@@ -2350,8 +2527,7 @@
                       "example": "free"
                     },
                     "remaining": {
-                      "type": "integer",
-                      "nullable": true,
+                      "type": ["integer", "null"],
                       "description": "Remaining quota (null = unlimited, 0 = quota exceeded)",
                       "example": 0
                     },
@@ -2471,6 +2647,21 @@
                   }
                 }
               }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "INTERNAL_ERROR",
+              "message": "An unexpected error occurred",
+              "statusCode": 500
             }
           }
         }

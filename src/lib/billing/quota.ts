@@ -76,7 +76,7 @@ export async function getUserPlan(userId: string): Promise<{
   // Check for active subscription
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan_type, status, trial_end')
+    .select('plan_type, status, trial_end, cancel_at_period_end, current_period_end')
     .eq('user_id', userId)
     .in('status', ['trialing', 'active', 'past_due'])
     .order('created_at', { ascending: false })
@@ -88,6 +88,9 @@ export async function getUserPlan(userId: string): Promise<{
     const isTrialing = subscription.status === 'trialing';
     const now = new Date();
     const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : null;
+    const currentPeriodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end)
+      : null;
 
     // Allow access during grace period (14 days after payment failure)
     // or during active trial
@@ -95,6 +98,20 @@ export async function getUserPlan(userId: string): Promise<{
       subscription.status === 'active' ||
       subscription.status === 'trialing' ||
       (isPastDue && trialEnd && trialEnd > now); // Grace period
+
+    // T095-T096: If subscription is scheduled for downgrade (cancel_at_period_end=true),
+    // user maintains current plan privileges until current_period_end
+    // This ensures premium features remain accessible until the downgrade takes effect
+    if (subscription.cancel_at_period_end && currentPeriodEnd && now < currentPeriodEnd) {
+      // User has scheduled a downgrade but period hasn't ended yet
+      // Continue using current plan (premium access until period end)
+      return {
+        plan: subscription.plan_type as 'pro' | 'team',
+        subscriptionStatus: subscription.status,
+        isTrialing,
+        isPastDue,
+      };
+    }
 
     return {
       plan: hasAccess ? (subscription.plan_type as 'pro' | 'team') : 'free',

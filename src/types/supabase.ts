@@ -504,16 +504,22 @@ export type Database = {
       }
       stripe_events: {
         Row: {
+          attempted_at: string | null
+          completed_at: string | null
           id: string
-          processed_at: string | null
+          status: string
         }
         Insert: {
+          attempted_at?: string | null
+          completed_at?: string | null
           id: string
-          processed_at?: string | null
+          status?: string
         }
         Update: {
+          attempted_at?: string | null
+          completed_at?: string | null
           id?: string
-          processed_at?: string | null
+          status?: string
         }
         Relationships: []
       }

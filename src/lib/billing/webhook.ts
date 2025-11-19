@@ -48,21 +48,31 @@ export function verifyWebhookSignature(
 }
 
 /**
- * Check if webhook event has already been processed (idempotency)
+ * Check if webhook event has already been processed or is being processed (idempotency)
  *
  * Uses the stripe_events table to track processed events and prevent duplicate processing.
  * Stripe may send the same webhook multiple times (25%+ are retries).
  *
+ * Three-state machine:
+ * - NULL: Not yet processed (can process)
+ * - in_progress: Currently being processed (skip unless stale)
+ * - completed: Successfully processed (skip)
+ *
  * @param eventId - Stripe event ID
- * @returns True if event was already processed
+ * @returns Object with processing status information
  */
-export async function isEventProcessed(eventId: string): Promise<boolean> {
+export async function getEventStatus(eventId: string): Promise<{
+  exists: boolean;
+  status: 'in_progress' | 'completed' | null;
+  isStale: boolean;
+  attemptedAt: string | null;
+}> {
   try {
     const supabase = createServiceClient();
 
     const { data, error } = await supabase
       .from('stripe_events')
-      .select('id')
+      .select('id, status, attempted_at')
       .eq('id', eventId)
       .single();
 
@@ -75,15 +85,45 @@ export async function isEventProcessed(eventId: string): Promise<boolean> {
       throw error;
     }
 
-    const isProcessed = !!data;
+    if (!data) {
+      return {
+        exists: false,
+        status: null,
+        isStale: false,
+        attemptedAt: null,
+      };
+    }
 
-    if (isProcessed) {
-      logger.warn('Duplicate webhook event detected (already processed)', undefined, {
+    // Check if event is stale (in_progress for more than 1 hour)
+    const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+    const attemptedAt = data.attempted_at ? new Date(data.attempted_at) : null;
+    const isStale =
+      data.status === 'in_progress' &&
+      attemptedAt !== null &&
+      Date.now() - attemptedAt.getTime() > STALE_THRESHOLD_MS;
+
+    if (data.status === 'completed') {
+      logger.warn('Duplicate webhook event detected (already completed)', undefined, {
         eventId,
+      });
+    } else if (data.status === 'in_progress' && !isStale) {
+      logger.warn('Event already being processed by another instance', undefined, {
+        eventId,
+        attemptedAt: data.attempted_at,
+      });
+    } else if (isStale) {
+      logger.warn('Found stale in_progress event, will allow reprocessing', undefined, {
+        eventId,
+        attemptedAt: data.attempted_at,
       });
     }
 
-    return isProcessed;
+    return {
+      exists: true,
+      status: data.status as 'in_progress' | 'completed',
+      isStale,
+      attemptedAt: data.attempted_at,
+    };
   } catch (error) {
     logger.error('Error checking webhook idempotency', undefined, {
       error,
@@ -94,43 +134,57 @@ export async function isEventProcessed(eventId: string): Promise<boolean> {
 }
 
 /**
- * Mark webhook event as processed
- *
- * Inserts event ID into stripe_events table to prevent duplicate processing.
- * Uses INSERT with ON CONFLICT to handle race conditions.
+ * Check if webhook event has already been processed (idempotency)
  *
  * @param eventId - Stripe event ID
- * @returns True if marked successfully
+ * @returns True if event was already processed or is being processed
+ * @deprecated Use getEventStatus for more detailed status information
  */
-export async function markEventAsProcessed(eventId: string): Promise<boolean> {
+export async function isEventProcessed(eventId: string): Promise<boolean> {
+  const status = await getEventStatus(eventId);
+  // Skip if completed, or if in_progress and not stale
+  return status.status === 'completed' || (status.status === 'in_progress' && !status.isStale);
+}
+
+/**
+ * Mark webhook event as in_progress
+ *
+ * Atomically inserts event ID into stripe_events table with 'in_progress' status.
+ * Uses INSERT to handle race conditions - only one instance can successfully insert.
+ *
+ * @param eventId - Stripe event ID
+ * @returns True if marked as in_progress successfully, false if already exists
+ */
+export async function markEventInProgress(eventId: string): Promise<boolean> {
   try {
     const supabase = createServiceClient();
 
     const { error } = await supabase.from('stripe_events').insert({
       id: eventId,
-      processed_at: new Date().toISOString(),
+      status: 'in_progress',
+      attempted_at: new Date().toISOString(),
     });
 
     if (error) {
-      // If error code is 23505 (unique violation), event was already processed
+      // If error code is 23505 (unique violation), event already exists
       if (error.code === '23505') {
-        logger.warn('Event already marked as processed (race condition)', undefined, {
+        logger.warn('Event already exists (race condition handled)', undefined, {
           eventId,
         });
         return false;
       }
 
-      logger.error('Failed to mark event as processed', undefined, {
+      logger.error('Failed to mark event as in_progress', undefined, {
         error,
         eventId,
       });
       throw error;
     }
 
-    logger.info('Marked event as processed', undefined, { eventId });
+    logger.info('Marked event as in_progress', undefined, { eventId });
     return true;
   } catch (error) {
-    logger.error('Error marking event as processed', undefined, {
+    logger.error('Error marking event as in_progress', undefined, {
       error,
       eventId,
     });
@@ -139,49 +193,178 @@ export async function markEventAsProcessed(eventId: string): Promise<boolean> {
 }
 
 /**
+ * Mark webhook event as completed
+ *
+ * Updates event status to 'completed' after successful handler execution.
+ * Should only be called after the handler has successfully processed the event.
+ *
+ * @param eventId - Stripe event ID
+ * @returns True if marked as completed successfully
+ */
+export async function markEventCompleted(eventId: string): Promise<boolean> {
+  try {
+    const supabase = createServiceClient();
+
+    const { error, count } = await supabase
+      .from('stripe_events')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', eventId)
+      .eq('status', 'in_progress');
+
+    if (error) {
+      logger.error('Failed to mark event as completed', undefined, {
+        error,
+        eventId,
+      });
+      throw error;
+    }
+
+    if (count === 0) {
+      logger.warn('Event was not in in_progress state when marking completed', undefined, {
+        eventId,
+      });
+      return false;
+    }
+
+    logger.info('Marked event as completed', undefined, { eventId });
+    return true;
+  } catch (error) {
+    logger.error('Error marking event as completed', undefined, {
+      error,
+      eventId,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Reset stale in_progress event for reprocessing
+ *
+ * Deletes an event that was stuck in in_progress state, allowing it to be reprocessed.
+ * Only call this after confirming the event is stale via getEventStatus.
+ *
+ * @param eventId - Stripe event ID
+ * @returns True if reset successfully
+ */
+export async function resetStaleEvent(eventId: string): Promise<boolean> {
+  try {
+    const supabase = createServiceClient();
+
+    const { error } = await supabase
+      .from('stripe_events')
+      .delete()
+      .eq('id', eventId)
+      .eq('status', 'in_progress');
+
+    if (error) {
+      logger.error('Failed to reset stale event', undefined, {
+        error,
+        eventId,
+      });
+      throw error;
+    }
+
+    logger.info('Reset stale event for reprocessing', undefined, { eventId });
+    return true;
+  } catch (error) {
+    logger.error('Error resetting stale event', undefined, {
+      error,
+      eventId,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Mark webhook event as processed
+ *
+ * @deprecated Use markEventInProgress and markEventCompleted instead
+ */
+export async function markEventAsProcessed(eventId: string): Promise<boolean> {
+  // For backward compatibility, this now marks as in_progress
+  // The caller is expected to use the new handleWebhookEvent which properly
+  // transitions to completed after successful processing
+  return markEventInProgress(eventId);
+}
+
+/**
  * Process Stripe webhook event with idempotency check
  *
- * Generic wrapper that:
- * 1. Checks if event was already processed
- * 2. Executes handler function if not
- * 3. Marks event as processed
+ * Implements a three-state machine pattern for robust idempotency:
+ * 1. Check event status (NULL, in_progress, completed)
+ * 2. Mark as in_progress atomically (handles race conditions)
+ * 3. Execute handler
+ * 4. Mark as completed ONLY on success
+ *
+ * If the handler fails, the event stays in 'in_progress' state and can be
+ * reprocessed on Stripe's automatic retry (after 1 hour stale threshold).
  *
  * @param event - Verified Stripe event
  * @param handler - Async function to process the event
- * @returns Result from handler or null if already processed
+ * @returns Result from handler or null if already processed/processing
  */
 export async function handleWebhookEvent<T>(
   event: Stripe.Event,
   handler: (event: Stripe.Event) => Promise<T>
 ): Promise<T | null> {
-  // Check idempotency
-  const alreadyProcessed = await isEventProcessed(event.id);
-  if (alreadyProcessed) {
-    logger.info('Skipping duplicate webhook event', undefined, {
+  // Check current event status
+  const eventStatus = await getEventStatus(event.id);
+
+  // Handle already completed events
+  if (eventStatus.status === 'completed') {
+    logger.info('Skipping duplicate webhook event (already completed)', undefined, {
       eventId: event.id,
       eventType: event.type,
     });
     return null;
   }
 
-  try {
-    // Mark as processed BEFORE executing handler to prevent race conditions
-    const marked = await markEventAsProcessed(event.id);
-    if (!marked) {
-      // Another instance already processing
-      logger.info('Another instance processing event, skipping', undefined, {
+  // Handle in_progress events
+  if (eventStatus.status === 'in_progress') {
+    if (eventStatus.isStale) {
+      // Reset stale event to allow reprocessing
+      logger.info('Resetting stale in_progress event for reprocessing', undefined, {
         eventId: event.id,
+        eventType: event.type,
+        attemptedAt: eventStatus.attemptedAt,
+      });
+      await resetStaleEvent(event.id);
+    } else {
+      // Another instance is actively processing
+      logger.info('Another instance is processing event, skipping', undefined, {
+        eventId: event.id,
+        eventType: event.type,
+        attemptedAt: eventStatus.attemptedAt,
       });
       return null;
     }
+  }
 
-    // Execute handler
+  // Atomically mark as in_progress
+  const marked = await markEventInProgress(event.id);
+  if (!marked) {
+    // Another instance won the race
+    logger.info('Another instance claimed event processing, skipping', undefined, {
+      eventId: event.id,
+      eventType: event.type,
+    });
+    return null;
+  }
+
+  // Execute handler
+  try {
     logger.info('Processing webhook event', undefined, {
       eventId: event.id,
       eventType: event.type,
     });
 
     const result = await handler(event);
+
+    // Mark as completed ONLY after successful handler execution
+    await markEventCompleted(event.id);
 
     logger.info('Webhook event processed successfully', undefined, {
       eventId: event.id,
@@ -190,10 +373,13 @@ export async function handleWebhookEvent<T>(
 
     return result;
   } catch (error) {
-    logger.error('Failed to process webhook event', undefined, {
+    // Handler failed - event stays in 'in_progress' state
+    // Stripe will retry and the event can be reprocessed after stale threshold
+    logger.error('Failed to process webhook event (can be retried)', undefined, {
       error,
       eventId: event.id,
       eventType: event.type,
+      note: 'Event remains in in_progress state for retry',
     });
     throw error;
   }

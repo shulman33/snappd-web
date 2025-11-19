@@ -214,20 +214,20 @@ Using Next.js 15 App Router structure:
 
 ### Implementation for User Story 5
 
-- [ ] T100 [P] [US5] Review existing Stripe Customer Portal configuration for cancellation options
-- [ ] T101 [US5] Create POST /api/v1/billing/subscription/cancel route in app/api/v1/billing/subscription/cancel/route.ts
-- [ ] T102 [US5] Update public/openapi.json to add /api/v1/billing/subscription/cancel endpoint with immediate and end-of-period options
-- [ ] T103 [US5] Use context7 to fetch Stripe subscription cancellation documentation, then implement end-of-period cancellation with cancel_at_period_end=true in cancel route
-- [ ] T104 [US5] Implement immediate cancellation with prorate=true and send invoice.created event for refund calculation
-- [ ] T105 [US5] Use context7 to fetch SendGrid templates documentation, then create cancellation confirmation email template in src/lib/email/templates/subscription-canceled.tsx
-- [ ] T106 [US5] Implement customer.subscription.deleted webhook handler to update subscription status and create subscription_event audit log
-- [ ] T107 [US5] Add data retention timestamp calculation (canceled_at + 90 days) to subscription record when canceled
-- [ ] T108 [P] [US5] Create POST /api/v1/billing/subscription/reactivate route in app/api/v1/billing/subscription/reactivate/route.ts
-- [ ] T109 [US5] Update public/openapi.json to add /api/v1/billing/subscription/reactivate endpoint
-- [ ] T110 [US5] Implement reactivation logic to check data retention period and restore access if within 90 days
-- [ ] T111 [US5] Use Stripe test mode to test end-of-period cancellation: verify cancel_at_period_end=true and service continues
-- [ ] T112 [US5] Use Stripe test mode to test immediate cancellation: verify prorate calculation and immediate access revocation
-- [ ] T113 [US5] Use Supabase MCP execute_sql to verify subscription_events table logs cancellation with reason and timestamp
+- [X] T100 [P] [US5] Review existing Stripe Customer Portal configuration for cancellation options
+- [X] T101 [US5] Create POST /api/v1/billing/subscription/cancel route in app/api/v1/billing/subscription/cancel/route.ts
+- [X] T102 [US5] Update public/openapi.json to add /api/v1/billing/subscription/cancel endpoint with immediate and end-of-period options
+- [X] T103 [US5] Use context7 to fetch Stripe subscription cancellation documentation, then implement end-of-period cancellation with cancel_at_period_end=true in cancel route
+- [X] T104 [US5] Implement immediate cancellation with prorate=true and send invoice.created event for refund calculation
+- [X] T105 [US5] Use context7 to fetch SendGrid templates documentation, then create cancellation confirmation email template in src/lib/email/templates/subscription-canceled.tsx
+- [X] T106 [US5] Implement customer.subscription.deleted webhook handler to update subscription status and create subscription_event audit log
+- [X] T107 [US5] Add data retention timestamp calculation (canceled_at + 90 days) to subscription record when canceled
+- [X] T108 [P] [US5] Create POST /api/v1/billing/subscription/reactivate route in app/api/v1/billing/subscription/reactivate/route.ts
+- [X] T109 [US5] Update public/openapi.json to add /api/v1/billing/subscription/reactivate endpoint
+- [X] T110 [US5] Implement reactivation logic to check data retention period and restore access if within 90 days
+- [x] T111 [US5] Use Stripe test mode to test end-of-period cancellation: verify cancel_at_period_end=true and service continues
+- [x] T112 [US5] Use Stripe test mode to test immediate cancellation: verify prorate calculation and immediate access revocation
+- [X] T113 [US5] Use Supabase MCP execute_sql to verify subscription_events table logs cancellation with reason and timestamp
 
 **Checkpoint**: Transparent cancellation builds trust and enables easy reactivation
 

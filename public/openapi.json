@@ -2193,6 +2193,269 @@
           }
         }
       }
+    },
+    "/billing/subscription/cancel": {
+      "post": {
+        "summary": "Cancel subscription",
+        "description": "Cancel the user's active subscription with options for immediate or end-of-period cancellation.\n\n**Cancellation Types**:\n- `immediate`: Cancels now, prorates refund for unused time\n- `end_of_period`: Cancels at billing period end, service continues until then\n\n**Data Retention**: User data is retained for 90 days after cancellation, allowing reactivation.\n\n**Email Notification**: Sends confirmation email with cancellation details and data retention information.\n\n**Audit Trail**: Creates entry in subscription_events table for compliance and support purposes.",
+        "operationId": "cancelSubscription",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Cancellation options",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cancellationType": {
+                    "type": "string",
+                    "enum": ["immediate", "end_of_period"],
+                    "default": "end_of_period",
+                    "description": "Type of cancellation"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Reason for cancellation (optional)"
+                  },
+                  "feedback": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "description": "Additional feedback (optional)"
+                  }
+                }
+              },
+              "examples": {
+                "endOfPeriod": {
+                  "summary": "Cancel at period end (recommended)",
+                  "value": {
+                    "cancellationType": "end_of_period",
+                    "reason": "Switching to another service"
+                  }
+                },
+                "immediate": {
+                  "summary": "Cancel immediately with prorated refund",
+                  "value": {
+                    "cancellationType": "immediate",
+                    "reason": "No longer needed",
+                    "feedback": "Great service, just don't need it anymore"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription canceled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canceled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "cancellationType": {
+                      "type": "string",
+                      "enum": ["immediate", "end_of_period"]
+                    },
+                    "effectiveDate": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the cancellation takes effect"
+                    },
+                    "serviceActiveUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When premium features will be deactivated"
+                    },
+                    "dataRetentionUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When user data will be eligible for deletion (90 days)"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable confirmation message"
+                    }
+                  }
+                },
+                "examples": {
+                  "endOfPeriod": {
+                    "value": {
+                      "canceled": true,
+                      "cancellationType": "end_of_period",
+                      "effectiveDate": "2025-12-01T00:00:00Z",
+                      "serviceActiveUntil": "2025-12-01T00:00:00Z",
+                      "dataRetentionUntil": "2026-03-01T00:00:00Z",
+                      "message": "Your subscription will be canceled at the end of your current billing period. You can continue using premium features until December 1, 2025."
+                    }
+                  },
+                  "immediate": {
+                    "value": {
+                      "canceled": true,
+                      "cancellationType": "immediate",
+                      "effectiveDate": "2025-11-18T10:30:00Z",
+                      "serviceActiveUntil": "2025-11-18T10:30:00Z",
+                      "dataRetentionUntil": "2026-02-16T10:30:00Z",
+                      "message": "Your subscription has been canceled immediately. You will receive a prorated refund."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No active subscription found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "No active subscription found to cancel",
+                  "statusCode": 404
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/subscription/reactivate": {
+      "post": {
+        "summary": "Reactivate subscription",
+        "description": "Reactivate a canceled subscription within the data retention period (90 days).\n\n**Reactivation Scenarios**:\n1. **Scheduled cancellation**: If subscription has `cancel_at_period_end=true`, simply unsets the flag\n2. **Fully canceled (within 90 days)**: Creates new checkout session to complete payment\n3. **Beyond retention (90+ days)**: Returns error, user must start fresh\n\n**Data Restoration**: For users within the retention period, their screenshots and data are preserved and will become accessible again after reactivation.",
+        "operationId": "reactivateSubscription",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reactivation processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reactivated": {
+                      "type": "boolean",
+                      "description": "Whether the subscription was immediately reactivated"
+                    },
+                    "reactivationType": {
+                      "type": "string",
+                      "enum": ["cancel_unscheduled", "new_subscription_required", "retention_expired", "no_subscription"],
+                      "description": "Type of reactivation performed"
+                    },
+                    "subscription": {
+                      "type": "object",
+                      "description": "Subscription details (when immediately reactivated)",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "planType": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "checkoutUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "URL to complete payment (when new subscription required)"
+                    },
+                    "previousPlan": {
+                      "type": "string",
+                      "description": "Previous plan type (for reference)"
+                    },
+                    "dataRetainedUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When data retention expires"
+                    },
+                    "dataRetentionExpired": {
+                      "type": "boolean",
+                      "description": "Whether retention period has passed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable status message"
+                    }
+                  }
+                },
+                "examples": {
+                  "cancelUnscheduled": {
+                    "summary": "Subscription reactivated by unscheduling cancellation",
+                    "value": {
+                      "reactivated": true,
+                      "reactivationType": "cancel_unscheduled",
+                      "subscription": {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "planType": "pro",
+                        "status": "active",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z"
+                      },
+                      "message": "Your subscription has been reactivated and will continue as normal."
+                    }
+                  },
+                  "newSubscriptionRequired": {
+                    "summary": "Checkout required to reactivate",
+                    "value": {
+                      "reactivated": false,
+                      "reactivationType": "new_subscription_required",
+                      "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_...",
+                      "previousPlan": "pro",
+                      "dataRetainedUntil": "2026-02-16T10:30:00Z",
+                      "message": "Please complete checkout to reactivate your subscription. Your previous data will be restored."
+                    }
+                  },
+                  "retentionExpired": {
+                    "summary": "Data retention period expired",
+                    "value": {
+                      "reactivated": false,
+                      "reactivationType": "retention_expired",
+                      "dataRetentionExpired": true,
+                      "expiredAt": "2025-02-16T10:30:00Z",
+                      "message": "Your data retention period of 90 days has expired. Please create a new subscription to start fresh."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -405,12 +405,18 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
     throw new Error('Subscription record not found')
   }
 
+  // Calculate data retention end date (90 days from cancellation)
+  const DATA_RETENTION_DAYS = 90
+  const canceledAt = new Date()
+  const dataRetentionUntil = new Date(canceledAt)
+  dataRetentionUntil.setDate(dataRetentionUntil.getDate() + DATA_RETENTION_DAYS)
+
   // Update subscription to canceled status
   const { error: updateError } = await supabase
     .from('subscriptions')
     .update({
       status: 'canceled',
-      canceled_at: new Date().toISOString(),
+      canceled_at: canceledAt.toISOString(),
     })
     .eq('stripe_subscription_id', subscription.id)
 
@@ -425,9 +431,10 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
   logger.info('Subscription marked as canceled', undefined, {
     subscriptionId: subscription.id,
     userId: existingSubscription.user_id,
+    dataRetentionUntil: dataRetentionUntil.toISOString(),
   })
 
-  // Create subscription event audit log
+  // Create subscription event audit log with data retention information
   const { error: eventError } = await supabase.from('subscription_events').insert({
     subscription_id: existingSubscription.id,
     user_id: existingSubscription.user_id,
@@ -437,6 +444,10 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
     metadata: {
       stripe_subscription_id: subscription.id,
       canceled_at: subscription.canceled_at,
+      data_retention_until: dataRetentionUntil.toISOString(),
+      data_retention_days: DATA_RETENTION_DAYS,
+      cancellation_reason: subscription.cancellation_details?.reason || null,
+      cancellation_feedback: subscription.cancellation_details?.feedback || null,
     },
   })
 
@@ -449,5 +460,5 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
 
   // Profile plan will be automatically reverted to 'free' by the database trigger
 
-  return { processed: true }
+  return { processed: true, dataRetentionUntil: dataRetentionUntil.toISOString() }
 }

@@ -19,7 +19,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createServerClient } from '@/lib/supabase/server';
 import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
 import { ApiResponse } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     logger.info('Get subscription request', request);
 
     // Get authenticated user
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const {
       data: { user },
       error: authError,

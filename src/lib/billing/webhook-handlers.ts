@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger'
 import { sendInvoiceEmail } from '@/lib/email/templates/invoice'
 import { sendTrialEndingEmail } from '@/lib/email/templates/trial-ending'
 import { sendSubscriptionCreatedEmail } from '@/lib/email/templates/subscription-created'
+import { sendPaymentFailedEmail } from '@/lib/email/templates/payment-failed'
 import { getPlanPrice } from './stripe'
 
 /**
@@ -345,6 +346,74 @@ export async function handleSubscriptionUpdated(event: Stripe.Event) {
     oldStatus: existingSubscription.status,
     newStatus: subscription.status,
   })
+
+  // Detect grace period expiration and suspension (T056)
+  // When a past_due subscription remains unpaid after 14 days, it should be suspended
+  if (existingSubscription.status === 'past_due') {
+    const { data: firstAttempt } = await supabase
+      .from('dunning_attempts')
+      .select('attempt_date')
+      .eq('subscription_id', existingSubscription.id)
+      .eq('attempt_number', 1)
+      .single()
+
+    if (firstAttempt) {
+      const GRACE_PERIOD_DAYS = 14
+      const gracePeriodStart = new Date(firstAttempt.attempt_date)
+      const gracePeriodEnd = new Date(gracePeriodStart)
+      gracePeriodEnd.setDate(gracePeriodEnd.getDate() + GRACE_PERIOD_DAYS)
+      const now = new Date()
+
+      // Check if grace period has expired
+      if (now > gracePeriodEnd && subscription.status === 'past_due') {
+        logger.warn('Grace period expired - suspending subscription', undefined, {
+          subscriptionId: subscription.id,
+          userId: existingSubscription.user_id,
+          gracePeriodStart: gracePeriodStart.toISOString(),
+          gracePeriodEnd: gracePeriodEnd.toISOString(),
+        })
+
+        // Update subscription to suspended status
+        const { error: suspensionError } = await supabase
+          .from('subscriptions')
+          .update({
+            status: 'suspended',
+          })
+          .eq('id', existingSubscription.id)
+
+        if (suspensionError) {
+          logger.error('Failed to suspend subscription', undefined, {
+            error: suspensionError,
+            subscriptionId: existingSubscription.id,
+          })
+        } else {
+          // Create subscription event for suspension
+          await supabase.from('subscription_events').insert({
+            subscription_id: existingSubscription.id,
+            user_id: existingSubscription.user_id,
+            event_type: 'suspended',
+            previous_status: 'past_due',
+            new_status: 'suspended',
+            metadata: {
+              stripe_subscription_id: subscription.id,
+              grace_period_start: gracePeriodStart.toISOString(),
+              grace_period_end: gracePeriodEnd.toISOString(),
+              reason: 'grace_period_expired',
+            },
+          })
+
+          logger.info('Subscription suspended after grace period expiration', undefined, {
+            subscriptionId: existingSubscription.id,
+            userId: existingSubscription.user_id,
+          })
+
+          // TODO: Send suspension notification email (future enhancement)
+          // This would inform user their premium features have been revoked
+          // and encourage them to update their payment method
+        }
+      }
+    }
+  }
 
   // Detect billing period renewal (monthly quota reset)
   const periodChanged =
@@ -843,6 +912,70 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     throw new Error('User not found for invoice')
   }
 
+  // Check if subscription was in past_due status (payment recovery - T052)
+  const stripeSubscriptionId =
+    typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+
+  let wasInPastDue = false
+  let subscriptionRecord: any = null
+
+  if (stripeSubscriptionId) {
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('stripe_subscription_id', stripeSubscriptionId)
+      .single()
+
+    if (subscription) {
+      subscriptionRecord = subscription
+      wasInPastDue = subscription.status === 'past_due'
+
+      // If subscription was past_due, update to active (payment recovered)
+      if (wasInPastDue) {
+        const { error: recoveryError } = await supabase
+          .from('subscriptions')
+          .update({
+            status: 'active',
+          })
+          .eq('id', subscription.id)
+
+        if (recoveryError) {
+          logger.error('Failed to update subscription from past_due to active', undefined, {
+            error: recoveryError,
+            subscriptionId: subscription.id,
+          })
+        } else {
+          logger.info('Payment recovered - subscription updated to active', undefined, {
+            subscriptionId: subscription.id,
+            userId: profile.id,
+          })
+
+          // Create subscription event for recovery
+          await supabase.from('subscription_events').insert({
+            subscription_id: subscription.id,
+            user_id: profile.id,
+            event_type: 'payment_recovered',
+            previous_status: 'past_due',
+            new_status: 'active',
+            metadata: {
+              stripe_invoice_id: invoice.id,
+              amount_paid: invoice.amount_paid,
+            },
+          })
+
+          // Mark any pending dunning attempts as successful
+          await supabase
+            .from('dunning_attempts')
+            .update({
+              payment_result: 'success',
+            })
+            .eq('subscription_id', subscription.id)
+            .eq('payment_result', 'failed')
+        }
+      }
+    }
+  }
+
   // Update invoice record to paid status
   const { error: updateError } = await supabase
     .from('invoices')
@@ -924,4 +1057,293 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   }
 
   return { processed: true }
+}
+
+/**
+ * Handle invoice.payment_failed event
+ *
+ * This event fires when an invoice payment fails.
+ * Implements dunning management with:
+ * - Grace period tracking (14 days)
+ * - Escalating email notifications (attempt 1, 2, 3)
+ * - Subscription status update to 'past_due'
+ * - Dunning attempt tracking in database
+ *
+ * @param event - Stripe webhook event
+ */
+export async function handleInvoicePaymentFailed(event: Stripe.Event) {
+  const invoice = event.data.object as Stripe.Invoice
+  const supabase = createServiceClient()
+
+  logger.info('Processing invoice.payment_failed', undefined, {
+    invoiceId: invoice.id,
+    customerId: invoice.customer,
+    subscriptionId: invoice.subscription,
+    attemptCount: invoice.attempt_count,
+  })
+
+  // Get Stripe subscription ID
+  const stripeSubscriptionId =
+    typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+
+  if (!stripeSubscriptionId) {
+    logger.error('No subscription on failed invoice', undefined, { invoiceId: invoice.id })
+    throw new Error('No subscription on failed invoice')
+  }
+
+  // Get user from Stripe customer ID
+  const customerId =
+    typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+
+  if (!customerId) {
+    logger.error('No customer ID on invoice', undefined, { invoiceId: invoice.id })
+    throw new Error('No customer ID on invoice')
+  }
+
+  // Find user profile with email
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, email, full_name, plan')
+    .eq('stripe_customer_id', customerId)
+    .single()
+
+  if (profileError || !profile) {
+    logger.error('Could not find user for failed payment', undefined, {
+      invoiceId: invoice.id,
+      customerId,
+      error: profileError,
+    })
+    throw new Error('User not found for failed payment')
+  }
+
+  // Get our internal subscription record
+  const { data: subscriptionRecord, error: subscriptionError } = await supabase
+    .from('subscriptions')
+    .select('*')
+    .eq('stripe_subscription_id', stripeSubscriptionId)
+    .single()
+
+  if (subscriptionError || !subscriptionRecord) {
+    logger.error('Could not find subscription for failed payment', undefined, {
+      invoiceId: invoice.id,
+      stripeSubscriptionId,
+      error: subscriptionError,
+    })
+    throw new Error('Subscription not found for failed payment')
+  }
+
+  // Update subscription status to 'past_due' if not already
+  if (subscriptionRecord.status !== 'past_due') {
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update({
+        status: 'past_due',
+      })
+      .eq('id', subscriptionRecord.id)
+
+    if (updateError) {
+      logger.error('Failed to update subscription to past_due', undefined, {
+        error: updateError,
+        subscriptionId: subscriptionRecord.id,
+      })
+      throw updateError
+    }
+
+    logger.info('Updated subscription status to past_due', undefined, {
+      subscriptionId: subscriptionRecord.id,
+      userId: profile.id,
+    })
+  }
+
+  // Check for existing dunning attempts to determine attempt number
+  const { data: existingAttempts, error: attemptsError } = await supabase
+    .from('dunning_attempts')
+    .select('attempt_number')
+    .eq('subscription_id', subscriptionRecord.id)
+    .order('attempt_number', { ascending: false })
+    .limit(1)
+
+  if (attemptsError) {
+    logger.error('Failed to query existing dunning attempts', undefined, {
+      error: attemptsError,
+      subscriptionId: subscriptionRecord.id,
+    })
+    throw attemptsError
+  }
+
+  const attemptNumber = existingAttempts.length > 0 ? existingAttempts[0].attempt_number + 1 : 1
+
+  // Calculate next retry date based on attempt number
+  // Attempt 1 -> Day 3, Attempt 2 -> Day 7, Attempt 3 -> Day 14
+  const retrySchedule = { 1: 3, 2: 7, 3: 14 }
+  const daysUntilNextRetry = retrySchedule[attemptNumber as 1 | 2 | 3] || 14
+  const nextRetryDate = new Date()
+  nextRetryDate.setDate(nextRetryDate.getDate() + daysUntilNextRetry)
+
+  // Calculate days remaining in grace period (14 days from first failure)
+  let gracePeriodStart: Date
+  if (attemptNumber === 1) {
+    gracePeriodStart = new Date()
+  } else {
+    // Get the first attempt date
+    const { data: firstAttempt } = await supabase
+      .from('dunning_attempts')
+      .select('attempt_date')
+      .eq('subscription_id', subscriptionRecord.id)
+      .eq('attempt_number', 1)
+      .single()
+
+    gracePeriodStart = firstAttempt ? new Date(firstAttempt.attempt_date) : new Date()
+  }
+
+  const GRACE_PERIOD_DAYS = 14
+  const gracePeriodEnd = new Date(gracePeriodStart)
+  gracePeriodEnd.setDate(gracePeriodEnd.getDate() + GRACE_PERIOD_DAYS)
+  const daysRemaining = Math.max(
+    0,
+    Math.ceil((gracePeriodEnd.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+  )
+
+  // Extract failure reason from Stripe
+  const failureReason =
+    invoice.last_payment_error?.message ||
+    invoice.last_payment_error?.code ||
+    'Payment method declined'
+
+  // Insert dunning attempt record
+  const { error: dunningError } = await supabase.from('dunning_attempts').insert({
+    subscription_id: subscriptionRecord.id,
+    attempt_number: attemptNumber,
+    attempt_date: new Date().toISOString(),
+    payment_result: 'failed',
+    failure_reason: failureReason,
+    next_retry_date: attemptNumber < 3 ? nextRetryDate.toISOString() : null,
+    notification_sent: false,
+  })
+
+  if (dunningError) {
+    logger.error('Failed to create dunning attempt record', undefined, {
+      error: dunningError,
+      subscriptionId: subscriptionRecord.id,
+      attemptNumber,
+    })
+    throw dunningError
+  }
+
+  logger.info('Created dunning attempt record', undefined, {
+    subscriptionId: subscriptionRecord.id,
+    attemptNumber,
+    nextRetryDate: nextRetryDate.toISOString(),
+    daysRemaining,
+  })
+
+  // Create subscription event audit log
+  const { error: eventError } = await supabase.from('subscription_events').insert({
+    subscription_id: subscriptionRecord.id,
+    user_id: profile.id,
+    event_type: 'payment_failed',
+    previous_status: subscriptionRecord.status === 'past_due' ? 'past_due' : 'active',
+    new_status: 'past_due',
+    metadata: {
+      stripe_invoice_id: invoice.id,
+      attempt_count: invoice.attempt_count,
+      attempt_number: attemptNumber,
+      failure_reason: failureReason,
+      amount_due: invoice.amount_due,
+      next_retry_date: attemptNumber < 3 ? nextRetryDate.toISOString() : null,
+      grace_period_ends: gracePeriodEnd.toISOString(),
+      days_remaining: daysRemaining,
+    },
+  })
+
+  if (eventError) {
+    logger.warn('Failed to create payment failure event log', undefined, {
+      error: eventError,
+      subscriptionId: subscriptionRecord.id,
+    })
+    // Don't throw - audit log failure shouldn't fail the webhook
+  }
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: invoice.currency?.toUpperCase() || 'USD',
+    }).format(amount / 100)
+  }
+
+  // Get plan name
+  const planName =
+    subscriptionRecord.plan_type === 'pro'
+      ? 'Pro'
+      : subscriptionRecord.plan_type === 'team'
+        ? 'Team'
+        : 'Subscription'
+
+  // Get Customer Portal URL for payment method update
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const updatePaymentUrl = `${baseUrl}/billing`
+
+  // Send payment failure email with escalating urgency
+  try {
+    if (profile.email) {
+      await sendPaymentFailedEmail(profile.email, {
+        userName: profile.full_name || undefined,
+        planName,
+        failureReason,
+        amountDue: formatCurrency(invoice.amount_due),
+        attemptNumber,
+        daysRemaining,
+        updatePaymentUrl,
+        invoiceUrl: invoice.hosted_invoice_url || undefined,
+      })
+
+      // Update dunning attempt to mark notification as sent
+      await supabase
+        .from('dunning_attempts')
+        .update({
+          notification_sent: true,
+          notification_sent_at: new Date().toISOString(),
+        })
+        .eq('subscription_id', subscriptionRecord.id)
+        .eq('attempt_number', attemptNumber)
+
+      logger.info('Payment failure email sent', undefined, {
+        invoiceId: invoice.id,
+        userId: profile.id,
+        email: profile.email,
+        attemptNumber,
+        daysRemaining,
+      })
+    } else {
+      logger.warn('Could not send payment failure email - no email address', undefined, {
+        invoiceId: invoice.id,
+        userId: profile.id,
+      })
+    }
+  } catch (emailError) {
+    logger.error('Failed to send payment failure email', undefined, {
+      error: emailError,
+      invoiceId: invoice.id,
+      userId: profile.id,
+      attemptNumber,
+    })
+    // Don't throw - email failure shouldn't fail the webhook
+  }
+
+  logger.info('Payment failure processed successfully', undefined, {
+    invoiceId: invoice.id,
+    subscriptionId: subscriptionRecord.id,
+    userId: profile.id,
+    attemptNumber,
+    daysRemaining,
+    gracePeriodEnds: gracePeriodEnd.toISOString(),
+  })
+
+  return {
+    processed: true,
+    attemptNumber,
+    daysRemaining,
+    gracePeriodEnds: gracePeriodEnd.toISOString(),
+  }
 }

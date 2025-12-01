@@ -26,6 +26,7 @@ import {
   handleTrialWillEnd,
   handleInvoiceFinalized,
   handleInvoicePaymentSucceeded,
+  handleInvoicePaymentFailed,
 } from '@/lib/billing/webhook-handlers';
 import { ApiErrorHandler, ApiErrorCode } from '@/lib/api/errors';
 import { ApiResponse } from '@/lib/api/response';
@@ -126,8 +127,7 @@ export async function POST(request: NextRequest) {
           break;
 
         case 'invoice.payment_failed':
-          // TODO: Implement in User Story 4 (T049)
-          logger.info('Invoice payment failed', request, { eventId: event.id });
+          await handleInvoicePaymentFailed(event);
           break;
 
         case 'invoice.finalized':

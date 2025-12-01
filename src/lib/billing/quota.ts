@@ -76,7 +76,7 @@ export async function getUserPlan(userId: string): Promise<{
   // Check for active subscription
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan_type, status, trial_end, cancel_at_period_end, current_period_end')
+    .select('id, plan_type, status, trial_end, cancel_at_period_end, current_period_end')
     .eq('user_id', userId)
     .in('status', ['trialing', 'active', 'past_due'])
     .order('created_at', { ascending: false })
@@ -92,12 +92,35 @@ export async function getUserPlan(userId: string): Promise<{
       ? new Date(subscription.current_period_end)
       : null;
 
-    // Allow access during grace period (14 days after payment failure)
-    // or during active trial
+    // Check grace period for past_due subscriptions (T049 - 14 days from first payment failure)
+    let inGracePeriod = false;
+    if (isPastDue) {
+      // Get the first dunning attempt to determine grace period start
+      const { data: firstAttempt } = await supabase
+        .from('dunning_attempts')
+        .select('attempt_date')
+        .eq('subscription_id', subscription.id)
+        .eq('attempt_number', 1)
+        .single();
+
+      if (firstAttempt) {
+        const GRACE_PERIOD_DAYS = 14;
+        const gracePeriodStart = new Date(firstAttempt.attempt_date);
+        const gracePeriodEnd = new Date(gracePeriodStart);
+        gracePeriodEnd.setDate(gracePeriodEnd.getDate() + GRACE_PERIOD_DAYS);
+
+        inGracePeriod = now < gracePeriodEnd;
+      }
+    }
+
+    // Allow access during:
+    // - Active subscription
+    // - Trial period
+    // - Grace period (14 days after first payment failure)
     const hasAccess =
       subscription.status === 'active' ||
       subscription.status === 'trialing' ||
-      (isPastDue && trialEnd && trialEnd > now); // Grace period
+      (isPastDue && inGracePeriod);
 
     // T095-T096: If subscription is scheduled for downgrade (cancel_at_period_end=true),
     // user maintains current plan privileges until current_period_end

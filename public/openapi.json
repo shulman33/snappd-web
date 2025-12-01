@@ -7,6 +7,10 @@
     "contact": {
       "name": "Snappd API Support",
       "email": "support@snappd.io"
+    },
+    "license": {
+      "name": "Proprietary",
+      "identifier": "LicenseRef-Proprietary"
     }
   },
   "servers": [
@@ -51,6 +55,10 @@
     {
       "name": "Usage",
       "description": "Quota and usage tracking"
+    },
+    {
+      "name": "Billing",
+      "description": "Subscription billing and payment management (Stripe integration)"
     }
   ],
   "security": [
@@ -616,12 +624,12 @@
     "/auth/user/usage": {
       "get": {
         "summary": "Get user quota usage",
-        "description": "Returns current month's usage statistics including screenshot count, storage, and bandwidth.",
+        "description": "Returns current month's usage statistics including screenshot count, storage, bandwidth, and subscription information.\n\n**Free Tier**: Returns usage with limited quotas (10 screenshots/month).\n\n**Pro/Team Plans**: Returns usage with unlimited quotas and active subscription details including trial status and billing period.\n\n**Subscription Info**: For users with active subscriptions, includes subscription status, trial information, and current billing period.",
         "operationId": "getUserUsage",
         "tags": ["Usage"],
         "responses": {
           "200": {
-            "description": "Usage statistics",
+            "description": "Usage statistics with subscription information",
             "content": {
               "application/json": {
                 "schema": {
@@ -630,27 +638,133 @@
                     "plan": {
                       "type": "string",
                       "enum": ["free", "pro", "team"],
-                      "example": "free"
+                      "example": "free",
+                      "description": "Current plan based on subscription status"
                     },
                     "currentMonth": {
                       "type": "string",
-                      "example": "2025-11"
+                      "example": "2025-11",
+                      "description": "Current month in YYYY-MM format"
                     },
                     "screenshotCount": {
                       "type": "integer",
-                      "example": 7
+                      "example": 7,
+                      "description": "Number of screenshots uploaded this month"
                     },
                     "screenshotLimit": {
                       "type": ["integer", "null"],
                       "example": 10,
-                      "description": "null for unlimited (pro/team)"
+                      "description": "Monthly screenshot limit (null = unlimited)"
                     },
                     "storageBytes": {
                       "type": "integer",
-                      "example": 52428800
+                      "example": 52428800,
+                      "description": "Total storage used in bytes"
                     },
                     "storageLimitBytes": {
-                      "type": ["integer", "null"]
+                      "type": ["integer", "null"],
+                      "description": "Storage limit in bytes (null = unlimited)"
+                    },
+                    "bandwidthBytes": {
+                      "type": "integer",
+                      "example": 104857600,
+                      "description": "Total bandwidth used in bytes"
+                    },
+                    "bandwidthLimitBytes": {
+                      "type": ["integer", "null"],
+                      "description": "Bandwidth limit in bytes (null = unlimited)"
+                    },
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "null",
+                          "description": "No active subscription (free tier)"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": ["trialing", "active", "past_due"],
+                              "description": "Current subscription status"
+                            },
+                            "isTrialing": {
+                              "type": "boolean",
+                              "description": "Whether subscription is in trial period"
+                            },
+                            "isPastDue": {
+                              "type": "boolean",
+                              "description": "Whether subscription payment is past due"
+                            },
+                            "trialEnd": {
+                              "type": ["string", "null"],
+                              "format": "date-time",
+                              "description": "Trial end date (null if not in trial)"
+                            },
+                            "currentPeriodEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "End of current billing period"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "freeUser": {
+                    "summary": "Free tier user",
+                    "value": {
+                      "plan": "free",
+                      "currentMonth": "2025-11",
+                      "screenshotCount": 7,
+                      "screenshotLimit": 10,
+                      "storageBytes": 52428800,
+                      "storageLimitBytes": null,
+                      "bandwidthBytes": 104857600,
+                      "bandwidthLimitBytes": null,
+                      "subscription": null
+                    }
+                  },
+                  "proUserTrialing": {
+                    "summary": "Pro user in trial period",
+                    "value": {
+                      "plan": "pro",
+                      "currentMonth": "2025-11",
+                      "screenshotCount": 50,
+                      "screenshotLimit": null,
+                      "storageBytes": 524288000,
+                      "storageLimitBytes": null,
+                      "bandwidthBytes": 1048576000,
+                      "bandwidthLimitBytes": null,
+                      "subscription": {
+                        "status": "trialing",
+                        "isTrialing": true,
+                        "isPastDue": false,
+                        "trialEnd": "2025-11-15T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z"
+                      }
+                    }
+                  },
+                  "proUserActive": {
+                    "summary": "Pro user with active subscription",
+                    "value": {
+                      "plan": "pro",
+                      "currentMonth": "2025-11",
+                      "screenshotCount": 150,
+                      "screenshotLimit": null,
+                      "storageBytes": 1073741824,
+                      "storageLimitBytes": null,
+                      "bandwidthBytes": 2147483648,
+                      "bandwidthLimitBytes": null,
+                      "subscription": {
+                        "status": "active",
+                        "isTrialing": false,
+                        "isPastDue": false,
+                        "trialEnd": null,
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z"
+                      }
                     }
                   }
                 }
@@ -1400,6 +1514,1198 @@
           }
         }
       }
+    },
+    "/billing/create-checkout": {
+      "post": {
+        "summary": "Create Stripe Checkout session",
+        "description": "Creates a Stripe Checkout session for plan upgrades.\n\n**Features**:\n- Supports Pro and Team plan subscriptions\n- Configures 14-day free trial with payment method required\n- Handles monthly and annual billing cycles\n- Automatic proration for team seat management\n- Returns Checkout session URL for client redirect\n\n**Plan Types**:\n- `pro`: Individual plan ($9/month or $90/year)\n- `team`: Team plan ($9/user/month or $90/user/year, minimum 3 seats)\n\n**Free Trial**: All subscriptions include a 14-day free trial. Payment method is required but won't be charged until the trial ends. If no payment method is added by the trial end, the subscription is canceled automatically.\n\n**Usage**:\n1. Call this endpoint to create a Checkout session\n2. Redirect the user to the returned `url`\n3. User completes payment on Stripe's hosted page\n4. Stripe redirects back to your `successUrl` or `cancelUrl`\n5. Webhook processes the completed checkout and activates subscription",
+        "operationId": "createCheckoutSession",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["planType"],
+                "properties": {
+                  "planType": {
+                    "type": "string",
+                    "enum": ["pro", "team"],
+                    "description": "Plan type to subscribe to"
+                  },
+                  "billingCycle": {
+                    "type": "string",
+                    "enum": ["monthly", "annual"],
+                    "default": "monthly",
+                    "description": "Billing cycle (defaults to monthly)"
+                  },
+                  "seatCount": {
+                    "type": "integer",
+                    "minimum": 3,
+                    "description": "Number of seats (required for team plans, minimum 3)"
+                  },
+                  "successUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect to after successful checkout (optional, defaults to /billing/success)"
+                  },
+                  "cancelUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect to if checkout is canceled (optional, defaults to /billing/canceled)"
+                  }
+                },
+                "example": {
+                  "planType": "pro",
+                  "billingCycle": "monthly"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string",
+                      "description": "Stripe Checkout session ID",
+                      "example": "cs_test_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Checkout session URL to redirect user to",
+                      "example": "https://checkout.stripe.com/c/pay/cs_test_..."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the checkout session expires",
+                      "example": "2025-11-08T12:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/webhook": {
+      "post": {
+        "summary": "Stripe webhook handler",
+        "description": "Receives and processes webhook events from Stripe for subscription lifecycle management.\n\nThis endpoint handles the following events:\n- `checkout.session.completed` - Checkout session completed\n- `customer.subscription.created` - New subscription created\n- `customer.subscription.updated` - Subscription updated (plan change, status change)\n- `customer.subscription.deleted` - Subscription canceled\n- `customer.subscription.trial_will_end` - Trial ending soon (7 days before)\n- `invoice.payment_succeeded` - Payment successful\n- `invoice.payment_failed` - Payment failed (triggers dunning)\n- `invoice.finalized` - Invoice generated\n\n**Security**: This endpoint verifies the Stripe webhook signature using the `Stripe-Signature` header. No authentication is required, but the webhook secret must be configured correctly.\n\n**Idempotency**: Events are deduplicated using the `stripe_events` table to prevent duplicate processing. Stripe may send the same event multiple times (~25% of events are retries).\n\n**Testing**: Use Stripe CLI to test locally:\n```bash\nstripe listen --forward-to localhost:3000/api/v1/billing/webhook\nstripe trigger customer.subscription.created\n```",
+        "operationId": "handleStripeWebhook",
+        "tags": ["Billing"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "Stripe-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Webhook signature for verification (automatically added by Stripe)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Raw Stripe webhook event payload",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Unique event ID (used for idempotency)"
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "Event type (e.g., 'customer.subscription.created')",
+                    "enum": [
+                      "checkout.session.completed",
+                      "customer.subscription.created",
+                      "customer.subscription.updated",
+                      "customer.subscription.deleted",
+                      "customer.subscription.trial_will_end",
+                      "invoice.payment_succeeded",
+                      "invoice.payment_failed",
+                      "invoice.finalized"
+                    ]
+                  },
+                  "data": {
+                    "type": "object",
+                    "description": "Event data (varies by event type)"
+                  },
+                  "api_version": {
+                    "type": "string",
+                    "description": "Stripe API version"
+                  },
+                  "created": {
+                    "type": "integer",
+                    "description": "Unix timestamp when event was created"
+                  }
+                },
+                "required": ["id", "type", "data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully (or duplicate detected)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "processed": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "True if event was processed, false if duplicate"
+                    },
+                    "duplicate": {
+                      "type": "boolean",
+                      "example": false,
+                      "description": "True if event was already processed (idempotency)"
+                    },
+                    "handled": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "False if event type is not handled by this application"
+                    }
+                  }
+                },
+                "examples": {
+                  "processed": {
+                    "summary": "Event processed successfully",
+                    "value": {
+                      "received": true,
+                      "processed": true
+                    }
+                  },
+                  "duplicate": {
+                    "summary": "Duplicate event (already processed)",
+                    "value": {
+                      "received": true,
+                      "duplicate": true
+                    }
+                  },
+                  "unhandled": {
+                    "summary": "Event type not handled",
+                    "value": {
+                      "received": true,
+                      "handled": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid Stripe-Signature header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "BAD_REQUEST",
+                  "message": "Missing Stripe-Signature header",
+                  "statusCode": 400
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Webhook signature verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Invalid webhook signature",
+                  "statusCode": 401
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Webhook processing error (Stripe will retry)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to process webhook event",
+                  "statusCode": 500
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/subscription": {
+      "get": {
+        "summary": "Get current subscription",
+        "description": "Returns the authenticated user's current subscription details, including plan type, billing cycle, trial status, and quota limits.\n\n**Free Tier**: Users without an active subscription receive free tier information with limited quotas.\n\n**Active Subscription**: Returns full subscription details including:\n- Subscription status (trialing, active, past_due)\n- Current billing period\n- Trial end date (if applicable)\n- Seat count (for team plans)\n- Plan-based quota limits\n\n**Use Cases**:\n- Display subscription info in user dashboard\n- Check plan limits before feature access\n- Show upgrade prompts for free users\n- Display trial countdown",
+        "operationId": "getCurrentSubscription",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription details (or free tier if no subscription)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subscription": {
+                      "oneOf": [
+                        {
+                          "type": "null",
+                          "description": "No active subscription (free tier)"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "description": "Internal subscription record ID"
+                            },
+                            "stripeSubscriptionId": {
+                              "type": "string",
+                              "description": "Stripe subscription ID"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": ["trialing", "active", "past_due", "canceled", "suspended"],
+                              "description": "Current subscription status"
+                            },
+                            "currentPeriodStart": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "Start of current billing period"
+                            },
+                            "currentPeriodEnd": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "End of current billing period"
+                            },
+                            "trialEnd": {
+                              "type": ["string", "null"],
+                              "format": "date-time",
+                              "description": "Trial end date (null if not in trial)"
+                            },
+                            "cancelAtPeriodEnd": {
+                              "type": "boolean",
+                              "description": "Whether subscription will cancel at period end"
+                            },
+                            "canceledAt": {
+                              "type": ["string", "null"],
+                              "format": "date-time",
+                              "description": "When subscription was canceled (null if not canceled)"
+                            },
+                            "seatCount": {
+                              "type": ["integer", "null"],
+                              "description": "Number of seats (team plans only)"
+                            },
+                            "teamId": {
+                              "type": ["string", "null"],
+                              "format": "uuid",
+                              "description": "Team ID (team plans only)"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "When subscription was created"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["free", "pro", "team"],
+                          "description": "Plan type"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Human-readable plan name"
+                        },
+                        "billingCycle": {
+                          "type": ["string", "null"],
+                          "enum": ["monthly", "annual", null],
+                          "description": "Billing cycle (null for free tier)"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Plan status"
+                        },
+                        "quotas": {
+                          "type": "object",
+                          "properties": {
+                            "screenshots": {
+                              "type": ["integer", "null"],
+                              "description": "Screenshot upload limit (null = unlimited)"
+                            },
+                            "storage": {
+                              "type": ["integer", "null"],
+                              "description": "Storage limit in bytes (null = unlimited)"
+                            },
+                            "bandwidth": {
+                              "type": ["integer", "null"],
+                              "description": "Bandwidth limit in bytes (null = unlimited)"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "freeTier": {
+                    "summary": "Free tier user (no subscription)",
+                    "value": {
+                      "subscription": null,
+                      "plan": {
+                        "type": "free",
+                        "name": "Free",
+                        "billingCycle": null,
+                        "status": "active",
+                        "quotas": {
+                          "screenshots": 10,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  },
+                  "proTrialing": {
+                    "summary": "Pro plan in trial period",
+                    "value": {
+                      "subscription": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "stripeSubscriptionId": "sub_1AbCdEfGhIjKlMnO",
+                        "status": "trialing",
+                        "currentPeriodStart": "2025-11-01T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z",
+                        "trialEnd": "2025-11-15T00:00:00Z",
+                        "cancelAtPeriodEnd": false,
+                        "canceledAt": null,
+                        "seatCount": null,
+                        "teamId": null,
+                        "createdAt": "2025-11-01T00:00:00Z"
+                      },
+                      "plan": {
+                        "type": "pro",
+                        "name": "Pro",
+                        "billingCycle": "monthly",
+                        "status": "trialing",
+                        "quotas": {
+                          "screenshots": null,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  },
+                  "proActive": {
+                    "summary": "Active Pro plan subscription",
+                    "value": {
+                      "subscription": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "stripeSubscriptionId": "sub_1AbCdEfGhIjKlMnO",
+                        "status": "active",
+                        "currentPeriodStart": "2025-11-01T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z",
+                        "trialEnd": null,
+                        "cancelAtPeriodEnd": false,
+                        "canceledAt": null,
+                        "seatCount": null,
+                        "teamId": null,
+                        "createdAt": "2025-10-15T00:00:00Z"
+                      },
+                      "plan": {
+                        "type": "pro",
+                        "name": "Pro",
+                        "billingCycle": "monthly",
+                        "status": "active",
+                        "quotas": {
+                          "screenshots": null,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  },
+                  "teamActive": {
+                    "summary": "Active Team plan subscription",
+                    "value": {
+                      "subscription": {
+                        "id": "660e8400-e29b-41d4-a716-446655440001",
+                        "stripeSubscriptionId": "sub_1ZyXwVuTsRqPoNmL",
+                        "status": "active",
+                        "currentPeriodStart": "2025-11-01T00:00:00Z",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z",
+                        "trialEnd": null,
+                        "cancelAtPeriodEnd": false,
+                        "canceledAt": null,
+                        "seatCount": 5,
+                        "teamId": "770e8400-e29b-41d4-a716-446655440002",
+                        "createdAt": "2025-10-01T00:00:00Z"
+                      },
+                      "plan": {
+                        "type": "team",
+                        "name": "Team",
+                        "billingCycle": "monthly",
+                        "status": "active",
+                        "quotas": {
+                          "screenshots": null,
+                          "storage": null,
+                          "bandwidth": null
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/create-portal": {
+      "post": {
+        "summary": "Create Customer Portal session",
+        "description": "Creates a Stripe Customer Portal session for subscription management.\n\nThe Customer Portal allows authenticated users with active subscriptions to:\n- Manage subscription plans (upgrade/downgrade)\n- Update payment methods\n- View and download invoices\n- Cancel subscriptions\n- Access billing history\n\n**Requirements**: User must have an active Stripe customer ID (must have created at least one subscription).\n\n**Return URL**: After completing actions in the portal, users are redirected to the specified return URL (defaults to /billing).\n\n**Flows**: Optional flow_data parameter allows deep-linking to specific customer portal workflows:\n- `payment_method_update` - Add/update payment method\n- `subscription_cancel` - Cancel subscription\n- `subscription_update` - Change subscription plan\n- `subscription_update_confirm` - Confirm pre-configured plan change\n\n**Use Cases**:\n- \"Manage subscription\" button in user dashboard\n- \"Update payment method\" link after payment failure\n- \"Cancel subscription\" flow\n- Self-service plan changes (upgrade/downgrade)",
+        "operationId": "createCustomerPortalSession",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Portal session configuration",
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "returnUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to redirect to after portal session (optional, defaults to /billing)",
+                    "example": "https://snappd.io/billing"
+                  },
+                  "flowData": {
+                    "type": "object",
+                    "description": "Optional flow configuration for deep-linking to specific workflows",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["payment_method_update", "subscription_cancel", "subscription_update", "subscription_update_confirm"],
+                        "description": "Type of customer portal workflow"
+                      },
+                      "subscriptionId": {
+                        "type": "string",
+                        "description": "Stripe subscription ID (required for subscription-related flows)",
+                        "example": "sub_1AbCdEfGhIjKlMnO"
+                      },
+                      "subscriptionUpdateConfirm": {
+                        "type": "object",
+                        "description": "Configuration for subscription_update_confirm flow",
+                        "properties": {
+                          "subscriptionId": {
+                            "type": "string",
+                            "description": "Stripe subscription ID",
+                            "example": "sub_1AbCdEfGhIjKlMnO"
+                          },
+                          "items": {
+                            "type": "array",
+                            "description": "New subscription items",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Subscription item ID",
+                                  "example": "si_1AbCdEfGhIjKlMnO"
+                                },
+                                "price": {
+                                  "type": "string",
+                                  "description": "New Stripe Price ID",
+                                  "example": "price_1AbCdEfGhIjKlMnO"
+                                },
+                                "quantity": {
+                                  "type": "integer",
+                                  "description": "New quantity",
+                                  "example": 5
+                                }
+                              },
+                              "required": ["id", "price"]
+                            }
+                          }
+                        },
+                        "required": ["subscriptionId"]
+                      }
+                    },
+                    "required": ["type"]
+                  }
+                }
+              },
+              "examples": {
+                "basicPortal": {
+                  "summary": "Basic portal session (no specific flow)",
+                  "value": {
+                    "returnUrl": "https://snappd.io/billing"
+                  }
+                },
+                "cancelFlow": {
+                  "summary": "Deep-link to subscription cancellation",
+                  "value": {
+                    "returnUrl": "https://snappd.io/billing",
+                    "flowData": {
+                      "type": "subscription_cancel",
+                      "subscriptionId": "sub_1AbCdEfGhIjKlMnO"
+                    }
+                  }
+                },
+                "updatePaymentMethod": {
+                  "summary": "Deep-link to payment method update",
+                  "value": {
+                    "returnUrl": "https://snappd.io/billing",
+                    "flowData": {
+                      "type": "payment_method_update"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customer Portal session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string",
+                      "description": "Stripe Customer Portal session ID",
+                      "example": "bps_1AbCdEfGhIjKlMnO"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "URL to redirect user to Customer Portal",
+                      "example": "https://billing.stripe.com/p/session/test_YWNjdF8xQWJDZEVmR2hJamtMbU5P"
+                    }
+                  },
+                  "required": ["sessionId", "url"]
+                },
+                "example": {
+                  "sessionId": "bps_1AbCdEfGhIjKlMnO",
+                  "url": "https://billing.stripe.com/p/session/test_YWNjdF8xQWJDZEVmR2hJamtMbU5P"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid parameters or no billing account found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": ["VALIDATION_ERROR", "BAD_REQUEST"],
+                      "example": "BAD_REQUEST"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "No billing account found. Please create a subscription first."
+                    },
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/subscription/cancel": {
+      "post": {
+        "summary": "Cancel subscription",
+        "description": "Cancel the user's active subscription with options for immediate or end-of-period cancellation.\n\n**Cancellation Types**:\n- `immediate`: Cancels now, prorates refund for unused time\n- `end_of_period`: Cancels at billing period end, service continues until then\n\n**Data Retention**: User data is retained for 90 days after cancellation, allowing reactivation.\n\n**Email Notification**: Sends confirmation email with cancellation details and data retention information.\n\n**Audit Trail**: Creates entry in subscription_events table for compliance and support purposes.",
+        "operationId": "cancelSubscription",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Cancellation options",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cancellationType": {
+                    "type": "string",
+                    "enum": ["immediate", "end_of_period"],
+                    "default": "end_of_period",
+                    "description": "Type of cancellation"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Reason for cancellation (optional)"
+                  },
+                  "feedback": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "description": "Additional feedback (optional)"
+                  }
+                }
+              },
+              "examples": {
+                "endOfPeriod": {
+                  "summary": "Cancel at period end (recommended)",
+                  "value": {
+                    "cancellationType": "end_of_period",
+                    "reason": "Switching to another service"
+                  }
+                },
+                "immediate": {
+                  "summary": "Cancel immediately with prorated refund",
+                  "value": {
+                    "cancellationType": "immediate",
+                    "reason": "No longer needed",
+                    "feedback": "Great service, just don't need it anymore"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription canceled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canceled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "cancellationType": {
+                      "type": "string",
+                      "enum": ["immediate", "end_of_period"]
+                    },
+                    "effectiveDate": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the cancellation takes effect"
+                    },
+                    "serviceActiveUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When premium features will be deactivated"
+                    },
+                    "dataRetentionUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When user data will be eligible for deletion (90 days)"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable confirmation message"
+                    }
+                  }
+                },
+                "examples": {
+                  "endOfPeriod": {
+                    "value": {
+                      "canceled": true,
+                      "cancellationType": "end_of_period",
+                      "effectiveDate": "2025-12-01T00:00:00Z",
+                      "serviceActiveUntil": "2025-12-01T00:00:00Z",
+                      "dataRetentionUntil": "2026-03-01T00:00:00Z",
+                      "message": "Your subscription will be canceled at the end of your current billing period. You can continue using premium features until December 1, 2025."
+                    }
+                  },
+                  "immediate": {
+                    "value": {
+                      "canceled": true,
+                      "cancellationType": "immediate",
+                      "effectiveDate": "2025-11-18T10:30:00Z",
+                      "serviceActiveUntil": "2025-11-18T10:30:00Z",
+                      "dataRetentionUntil": "2026-02-16T10:30:00Z",
+                      "message": "Your subscription has been canceled immediately. You will receive a prorated refund."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No active subscription found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "No active subscription found to cancel",
+                  "statusCode": 404
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/subscription/reactivate": {
+      "post": {
+        "summary": "Reactivate subscription",
+        "description": "Reactivate a canceled subscription within the data retention period (90 days).\n\n**Reactivation Scenarios**:\n1. **Scheduled cancellation**: If subscription has `cancel_at_period_end=true`, simply unsets the flag\n2. **Fully canceled (within 90 days)**: Creates new checkout session to complete payment\n3. **Beyond retention (90+ days)**: Returns error, user must start fresh\n\n**Data Restoration**: For users within the retention period, their screenshots and data are preserved and will become accessible again after reactivation.",
+        "operationId": "reactivateSubscription",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reactivation processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reactivated": {
+                      "type": "boolean",
+                      "description": "Whether the subscription was immediately reactivated"
+                    },
+                    "reactivationType": {
+                      "type": "string",
+                      "enum": ["cancel_unscheduled", "new_subscription_required", "retention_expired", "no_subscription"],
+                      "description": "Type of reactivation performed"
+                    },
+                    "subscription": {
+                      "type": "object",
+                      "description": "Subscription details (when immediately reactivated)",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "planType": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "currentPeriodEnd": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
+                    "checkoutUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "URL to complete payment (when new subscription required)"
+                    },
+                    "previousPlan": {
+                      "type": "string",
+                      "description": "Previous plan type (for reference)"
+                    },
+                    "dataRetainedUntil": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When data retention expires"
+                    },
+                    "dataRetentionExpired": {
+                      "type": "boolean",
+                      "description": "Whether retention period has passed"
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Human-readable status message"
+                    }
+                  }
+                },
+                "examples": {
+                  "cancelUnscheduled": {
+                    "summary": "Subscription reactivated by unscheduling cancellation",
+                    "value": {
+                      "reactivated": true,
+                      "reactivationType": "cancel_unscheduled",
+                      "subscription": {
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
+                        "planType": "pro",
+                        "status": "active",
+                        "currentPeriodEnd": "2025-12-01T00:00:00Z"
+                      },
+                      "message": "Your subscription has been reactivated and will continue as normal."
+                    }
+                  },
+                  "newSubscriptionRequired": {
+                    "summary": "Checkout required to reactivate",
+                    "value": {
+                      "reactivated": false,
+                      "reactivationType": "new_subscription_required",
+                      "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_...",
+                      "previousPlan": "pro",
+                      "dataRetainedUntil": "2026-02-16T10:30:00Z",
+                      "message": "Please complete checkout to reactivate your subscription. Your previous data will be restored."
+                    }
+                  },
+                  "retentionExpired": {
+                    "summary": "Data retention period expired",
+                    "value": {
+                      "reactivated": false,
+                      "reactivationType": "retention_expired",
+                      "dataRetentionExpired": true,
+                      "expiredAt": "2025-02-16T10:30:00Z",
+                      "message": "Your data retention period of 90 days has expired. Please create a new subscription to start fresh."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/invoices": {
+      "get": {
+        "summary": "List invoices",
+        "description": "Get paginated list of user's invoices with optional filtering by date range and status.",
+        "operationId": "listInvoices",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (default: 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by invoice status",
+            "schema": {
+              "type": "string",
+              "enum": ["draft", "open", "paid", "void", "uncollectible"]
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Filter invoices created on or after this date (ISO 8601)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Filter invoices created on or before this date (ISO 8601)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationInfo"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/invoices/{invoiceId}": {
+      "get": {
+        "summary": "Get invoice details",
+        "description": "Get detailed information about a specific invoice including line items, tax breakdown, and PDF download URL.",
+        "operationId": "getInvoice",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "description": "Invoice ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/billing/analytics": {
+      "get": {
+        "summary": "Get subscription analytics",
+        "description": "Retrieve subscription metrics and revenue analytics for business decision-making.\n\n**Available Metrics**:\n- `mrr` - Monthly Recurring Revenue (cents)\n- `arr` - Annual Recurring Revenue (cents)\n- `activeSubscriptions` - Count of active subscriptions\n- `trialSubscriptions` - Count of trialing subscriptions\n- `churnedSubscriptions` - Count of canceled subscriptions in period\n- `conversionRate` - Free to paid conversion rate (%)\n- `churnRate` - Monthly churn rate (%)\n- `averageRevenuePerUser` - ARPU in cents\n- `lifetimeValue` - Estimated LTV in cents\n- `paymentSuccessRate` - Payment success rate (%)\n- `dunningRecoveryRate` - Dunning recovery rate (%)\n- `revenueByPlan` - Revenue breakdown by plan type\n- `subscriptionsByPlan` - Subscription counts by plan type\n\n**Date Range**: Default is last 30 days. Use `startDate` and `endDate` to customize.",
+        "operationId": "getSubscriptionAnalytics",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Start of date range for analytics (ISO 8601). Default: 30 days ago",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "End of date range for analytics (ISO 8601). Default: now",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "metrics",
+            "in": "query",
+            "description": "Comma-separated list of metrics to include. If not specified, all metrics are returned.",
+            "schema": {
+              "type": "string",
+              "example": "mrr,arr,conversionRate,churnRate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionAnalyticsResponse"
+                },
+                "examples": {
+                  "fullAnalytics": {
+                    "summary": "Full analytics response",
+                    "value": {
+                      "mrr": 45000,
+                      "arr": 540000,
+                      "activeSubscriptions": 42,
+                      "trialSubscriptions": 8,
+                      "churnedSubscriptions": 3,
+                      "conversionRate": 8.5,
+                      "churnRate": 2.1,
+                      "averageRevenuePerUser": 900,
+                      "lifetimeValue": 42857,
+                      "paymentSuccessRate": 97.5,
+                      "dunningRecoveryRate": 35.0,
+                      "revenueByPlan": {
+                        "free": 0,
+                        "pro": 36000,
+                        "team": 9000
+                      },
+                      "subscriptionsByPlan": {
+                        "free": 0,
+                        "pro": 40,
+                        "team": 2
+                      },
+                      "dateRange": {
+                        "startDate": "2025-10-19T00:00:00.000Z",
+                        "endDate": "2025-11-18T23:59:59.999Z"
+                      },
+                      "generatedAt": "2025-11-18T12:00:00.000Z"
+                    }
+                  },
+                  "selectMetrics": {
+                    "summary": "Selected metrics only",
+                    "value": {
+                      "mrr": 45000,
+                      "conversionRate": 8.5,
+                      "churnRate": 2.1,
+                      "dateRange": {
+                        "startDate": "2025-10-19T00:00:00.000Z",
+                        "endDate": "2025-11-18T23:59:59.999Z"
+                      },
+                      "generatedAt": "2025-11-18T12:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1541,6 +2847,260 @@
             "type": "string",
             "format": "email",
             "example": "user@example.com"
+          }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "example": "INV-A1B2C3D4"
+          },
+          "stripeInvoiceId": {
+            "type": "string",
+            "description": "Stripe invoice ID"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "open", "paid", "void", "uncollectible"]
+          },
+          "subtotal": {
+            "type": "integer",
+            "description": "Subtotal in cents"
+          },
+          "tax": {
+            "type": "integer",
+            "description": "Tax amount in cents"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total amount in cents"
+          },
+          "amountPaid": {
+            "type": "integer",
+            "description": "Amount paid in cents"
+          },
+          "amountDue": {
+            "type": "integer",
+            "description": "Amount due in cents"
+          },
+          "currency": {
+            "type": "string",
+            "example": "usd"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dueDate": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "paidAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "hostedInvoiceUrl": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "URL to view invoice in browser"
+          },
+          "pdfUrl": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "URL to download invoice PDF"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InvoiceDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Invoice"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "subscriptionId": {
+                "type": ["string", "null"],
+                "format": "uuid"
+              },
+              "lineItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "quantity": {
+                      "type": "integer"
+                    },
+                    "unit_amount": {
+                      "type": "integer",
+                      "description": "Unit amount in cents"
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "description": "Line item total in cents"
+                    }
+                  }
+                }
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
+      },
+      "SubscriptionAnalyticsResponse": {
+        "type": "object",
+        "description": "Subscription analytics and revenue metrics",
+        "properties": {
+          "mrr": {
+            "type": "integer",
+            "description": "Monthly Recurring Revenue in cents",
+            "example": 45000
+          },
+          "arr": {
+            "type": "integer",
+            "description": "Annual Recurring Revenue in cents",
+            "example": 540000
+          },
+          "activeSubscriptions": {
+            "type": "integer",
+            "description": "Count of active subscriptions",
+            "example": 42
+          },
+          "trialSubscriptions": {
+            "type": "integer",
+            "description": "Count of trialing subscriptions",
+            "example": 8
+          },
+          "churnedSubscriptions": {
+            "type": "integer",
+            "description": "Count of canceled subscriptions in period",
+            "example": 3
+          },
+          "conversionRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Free to paid conversion rate (%)",
+            "example": 8.5
+          },
+          "churnRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Monthly churn rate (%)",
+            "example": 2.1
+          },
+          "averageRevenuePerUser": {
+            "type": "integer",
+            "description": "Average Revenue Per User in cents",
+            "example": 900
+          },
+          "lifetimeValue": {
+            "type": "integer",
+            "description": "Estimated Lifetime Value in cents",
+            "example": 42857
+          },
+          "paymentSuccessRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Payment success rate (%)",
+            "example": 97.5
+          },
+          "dunningRecoveryRate": {
+            "type": "number",
+            "format": "float",
+            "description": "Dunning recovery rate (%)",
+            "example": 35.0
+          },
+          "revenueByPlan": {
+            "type": "object",
+            "description": "Revenue breakdown by plan type (in cents)",
+            "properties": {
+              "free": {
+                "type": "integer",
+                "example": 0
+              },
+              "pro": {
+                "type": "integer",
+                "example": 36000
+              },
+              "team": {
+                "type": "integer",
+                "example": 9000
+              }
+            }
+          },
+          "subscriptionsByPlan": {
+            "type": "object",
+            "description": "Subscription counts by plan type",
+            "properties": {
+              "free": {
+                "type": "integer",
+                "example": 0
+              },
+              "pro": {
+                "type": "integer",
+                "example": 40
+              },
+              "team": {
+                "type": "integer",
+                "example": 2
+              }
+            }
+          },
+          "dateRange": {
+            "type": "object",
+            "description": "Date range for the analytics",
+            "properties": {
+              "startDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "endDate": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when analytics were generated"
+          }
+        }
+      },
+      "PaginationInfo": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
           }
         }
       },
@@ -1694,19 +3254,91 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
+              "type": "object",
+              "required": ["error", "message", "statusCode", "quota"],
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "MONTHLY_UPLOAD_LIMIT_EXCEEDED"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Monthly upload limit of 10 reached. Upgrade to Pro for unlimited uploads."
+                },
+                "statusCode": {
+                  "type": "integer",
+                  "example": 403
+                },
+                "quota": {
+                  "type": "object",
+                  "required": ["current", "limit", "plan"],
+                  "properties": {
+                    "current": {
+                      "type": "integer",
+                      "description": "Current usage count",
+                      "example": 10
+                    },
+                    "limit": {
+                      "type": ["integer", "null"],
+                      "description": "Quota limit (null = unlimited)",
+                      "example": 10
+                    },
+                    "unit": {
+                      "type": "string",
+                      "example": "uploads"
+                    },
+                    "plan": {
+                      "type": "string",
+                      "enum": ["free", "pro", "team"],
+                      "description": "User's current plan",
+                      "example": "free"
+                    },
+                    "remaining": {
+                      "type": ["integer", "null"],
+                      "description": "Remaining quota (null = unlimited, 0 = quota exceeded)",
+                      "example": 0
+                    },
+                    "resetAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When quota resets (ISO 8601)",
+                      "example": "2025-12-01T00:00:00.000Z"
+                    }
+                  }
+                },
+                "upgrade": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Upgrade to Pro for unlimited uploads"
+                    },
+                    "plan": {
+                      "type": "string",
+                      "example": "pro"
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": "/pricing"
+                    }
+                  }
+                }
+              }
             },
             "example": {
-              "error": "QUOTA_EXCEEDED",
-              "message": "You've reached your monthly limit of 10 screenshots. Upgrade to Pro for unlimited uploads.",
+              "error": "MONTHLY_UPLOAD_LIMIT_EXCEEDED",
+              "message": "Monthly upload limit of 10 reached. Upgrade to Pro for unlimited uploads.",
               "statusCode": 403,
               "quota": {
                 "current": 10,
                 "limit": 10,
-                "unit": "uploads"
+                "unit": "uploads",
+                "plan": "free",
+                "remaining": 0,
+                "resetAt": "2025-12-01T00:00:00.000Z"
               },
               "upgrade": {
-                "message": "Upgrade to Pro",
+                "message": "Upgrade to Pro for unlimited uploads",
                 "plan": "pro",
                 "url": "/pricing"
               }
@@ -1782,6 +3414,21 @@
                   }
                 }
               }
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "INTERNAL_ERROR",
+              "message": "An unexpected error occurred",
+              "statusCode": 500
             }
           }
         }

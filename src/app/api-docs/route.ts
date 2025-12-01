@@ -4,8 +4,8 @@ const config = {
   spec: {
     url: '/openapi.json',
   },
-  theme: 'default',
-  layout: 'modern',
+  theme: 'default' as const,
+  layout: 'modern' as const,
   showSidebar: true,
   customCss: `
     /* Snappd brand colors */

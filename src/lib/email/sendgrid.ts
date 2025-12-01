@@ -7,12 +7,11 @@
 
 import sgMail from '@sendgrid/mail';
 import type { MailDataRequired } from '@sendgrid/mail';
+import { SENDGRID_CONFIG } from '@/lib/config/env';
 
-// Initialize SendGrid with API key
-if (!process.env.SENDGRID_API_KEY) {
-  console.warn('SENDGRID_API_KEY is not set. Email sending will fail.');
-} else {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Initialize SendGrid with API key (validation done in env.ts)
+if (SENDGRID_CONFIG.apiKey) {
+  sgMail.setApiKey(SENDGRID_CONFIG.apiKey);
 }
 
 /**
@@ -92,8 +91,8 @@ export interface ScreenshotSharedData {
  * Default sender configuration
  */
 const DEFAULT_FROM = {
-  email: process.env.SENDGRID_FROM_EMAIL || 'noreply@snappd.app',
-  name: process.env.SENDGRID_FROM_NAME || 'Snappd',
+  email: SENDGRID_CONFIG.from.email,
+  name: SENDGRID_CONFIG.from.name,
 };
 
 /**

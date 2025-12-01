@@ -71,12 +71,17 @@
 - `pg_stat_statements` (1.11) - SQL statistics tracking
 - `uuid-ossp` (1.1) - UUID generation
 - `plpgsql` (1.0) - Procedural language
+- `pg_net` (0.19.5) - HTTP client for async requests (in `extensions` schema)
 
 ### Migrations
 
 1. `20251020205404_initial_schema` - Initial database schema
 2. `20251020225252_add_profiles_insert_policy` - Added RLS policy for profiles
 3. `disable_rls_on_stripe_events` - Disabled RLS on stripe_events (idempotency table)
+4. `20251104220435_remote_schema` - Remote schema sync
+5. `20251107153300_remote_schema` - Subscription billing schema (teams, invoices, etc.)
+6. `20251107154123_fix_function_search_path_security` - **Security Fix**: Added `SET search_path = ''` to 10 functions to prevent search path injection attacks
+7. `20251107154217_move_pgnet_extension_to_extensions_schema` - **Security Fix**: Moved `pg_net` extension from public to extensions schema
 
 ### Edge Functions
 
@@ -84,13 +89,23 @@ No edge functions currently deployed.
 
 ### Security Advisories
 
-**Active Warnings:**
-1. **Function Search Path Mutable**: `public.handle_new_user` function has mutable search_path
-   - Recommendation: Set search_path parameter on function
-   - [Learn more](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable)
+**Resolved (2025-11-07):**
+1. ✅ **Function Search Path Mutable** - FIXED
+   - Fixed 10 functions with `SET search_path = ''` to prevent search path injection
+   - Functions: `handle_new_user`, `check_upload_quota` (2 variants), `update_monthly_usage_on_insert`, `update_monthly_usage_on_delete`, `increment_view_count`, `update_updated_at`, `invoke_cleanup_edge_function`, `sync_team_filled_seats`, `sync_profile_plan`
+   - Migration: `20251107154123_fix_function_search_path_security`
+   - [Reference](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable)
 
-2. **Auth - Leaked Password Protection**: Currently disabled
-   - Recommendation: Enable HaveIBeenPwned.org integration for enhanced security
+2. ✅ **Extension in Public Schema** - FIXED
+   - Moved `pg_net` extension from `public` schema to `extensions` schema
+   - Migration: `20251107154217_move_pgnet_extension_to_extensions_schema`
+   - [Reference](https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public)
+
+**Action Required (Manual Configuration):**
+1. ⚠️ **Auth - Leaked Password Protection**: Currently disabled
+   - **Action**: Enable in Supabase Dashboard → Authentication → Password Protection
+   - Integrates with HaveIBeenPwned.org to reject compromised passwords
+   - Available on Pro Plan and above
    - [Learn more](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
 
 **Expected Warnings (Acceptable):**

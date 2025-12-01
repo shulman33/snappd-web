@@ -143,4 +143,10 @@ This constitution uses semantic versioning (MAJOR.MINOR.PATCH):
 - **MINOR**: New principles or materially expanded guidance  
 - **PATCH**: Clarifications, wording, non-semantic refinements
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-17 | **Last Amended**: 2025-10-17
+**Version**: 1.1.0 | **Ratified**: 2025-10-17 | **Last Amended**: 2025-12-01
+
+---
+
+## API & Documentation Policy
+
+All development MUST use the most up-to-date APIs and documentation available as of 2025-12-01. Always consult the latest official documentation for all dependencies before implementation.

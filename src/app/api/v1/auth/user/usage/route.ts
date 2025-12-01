@@ -67,26 +67,28 @@ export async function GET(request: NextRequest) {
     logger.info('Fetching usage for user', request, { userId: user.id });
 
     // Get user's effective plan (considers subscription status)
-    const { plan, subscriptionStatus, isTrialing, isPastDue } = await getUserPlan(
-      user.id
-    );
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const { plan, subscriptionStatus } = await getUserPlan(user.id);
+    const now = new Date();
+    const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM format
 
-    // Get current month's usage
-    const { data: usage, error: usageError } = await supabase
-      .from('monthly_usage')
-      .select('screenshot_count, storage_bytes, bandwidth_bytes')
+    // Try usage_records first using date range matching
+    // This works for both subscription-aligned periods and calendar months
+    const { data: usageRecord, error: usageRecordError } = await supabase
+      .from('usage_records')
+      .select('screenshot_count, storage_bytes, bandwidth_bytes, period_end')
       .eq('user_id', user.id)
-      .eq('month', currentMonth)
-      .single()
+      .lte('period_start', now.toISOString())
+      .gt('period_end', now.toISOString())
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (usageError && usageError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned, which is fine for first usage
-      logger.error('Error fetching usage', request, {
-        error: usageError,
+    if (usageRecordError) {
+      logger.error('Error fetching usage_records', request, {
+        error: usageRecordError,
         userId: user.id,
       });
-      return ApiErrorHandler.handle(usageError, {
+      return ApiErrorHandler.handle(usageRecordError, {
         request,
         logContext: {
           route: 'GET /api/v1/auth/user/usage',
@@ -95,10 +97,44 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Default to zero if no usage record exists yet
-    const screenshotCount = usage?.screenshot_count || 0;
-    const storageBytes = usage?.storage_bytes || 0;
-    const bandwidthBytes = usage?.bandwidth_bytes || 0;
+    let screenshotCount = 0;
+    let storageBytes = 0;
+    let bandwidthBytes = 0;
+
+    if (usageRecord) {
+      // Found usage_records entry - use it
+      screenshotCount = usageRecord.screenshot_count ?? 0;
+      storageBytes = usageRecord.storage_bytes ?? 0;
+      bandwidthBytes = usageRecord.bandwidth_bytes ?? 0;
+    } else {
+      // Fallback to monthly_usage for existing users without usage_records
+      const { data: monthlyUsage, error: monthlyError } = await supabase
+        .from('monthly_usage')
+        .select('screenshot_count, storage_bytes, bandwidth_bytes')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth)
+        .maybeSingle();
+
+      if (monthlyError) {
+        logger.error('Error fetching monthly_usage', request, {
+          error: monthlyError,
+          userId: user.id,
+        });
+        return ApiErrorHandler.handle(monthlyError, {
+          request,
+          logContext: {
+            route: 'GET /api/v1/auth/user/usage',
+            userId: user.id,
+          },
+        });
+      }
+
+      if (monthlyUsage) {
+        screenshotCount = monthlyUsage.screenshot_count ?? 0;
+        storageBytes = monthlyUsage.storage_bytes ?? 0;
+        bandwidthBytes = monthlyUsage.bandwidth_bytes ?? 0;
+      }
+    }
 
     // Define quota limits based on plan (null = unlimited)
     const screenshotLimit = plan === 'free' ? 10 : null;

@@ -138,7 +138,7 @@ export async function getConversionRate(
 
   // Get total free users who had the opportunity to upgrade
   // This includes users who registered and remained free + users who upgraded
-  let freeUsersQuery = supabase
+  const freeUsersQuery = supabase
     .from('profiles')
     .select('id', { count: 'exact' })
 

@@ -195,7 +195,7 @@ export async function checkUploadQuota(userId: string): Promise<QuotaCheckResult
     logger.info('Checking upload quota', undefined, { userId });
 
     // Get user's effective plan based on subscription status
-    const { plan, subscriptionStatus, isTrialing, isPastDue } = await getUserPlan(userId);
+    const { plan } = await getUserPlan(userId);
     const planQuota = PLAN_QUOTAS[plan];
 
     // Pro and Team plans have unlimited uploads
@@ -209,24 +209,27 @@ export async function checkUploadQuota(userId: string): Promise<QuotaCheckResult
       };
     }
 
-    // Get current billing period (calendar month for free users)
-    const periodStart = new Date();
-    periodStart.setDate(1);
-    periodStart.setHours(0, 0, 0, 0);
+    const now = new Date();
 
-    const periodEnd = new Date(periodStart);
+    // Calculate period end for quota reset info (next month for free users)
+    const periodEnd = new Date(now);
+    periodEnd.setDate(1);
     periodEnd.setMonth(periodEnd.getMonth() + 1);
+    periodEnd.setHours(0, 0, 0, 0);
 
-    // Get current usage for this period
+    // Try usage_records first using date range matching
+    // This works for both subscription-aligned periods and calendar months
     const { data: usageRecord, error: usageError } = await supabase
       .from('usage_records')
-      .select('screenshot_count')
+      .select('screenshot_count, period_end')
       .eq('user_id', userId)
-      .eq('period_start', periodStart.toISOString())
-      .single();
+      .lte('period_start', now.toISOString())
+      .gt('period_end', now.toISOString())
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (usageError && usageError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned
+    if (usageError) {
       logger.error('Failed to fetch usage record', undefined, {
         error: usageError,
         userId,
@@ -234,7 +237,34 @@ export async function checkUploadQuota(userId: string): Promise<QuotaCheckResult
       throw usageError;
     }
 
-    const currentUsage = usageRecord?.screenshot_count || 0;
+    let currentUsage = 0;
+    let resetAt = periodEnd.toISOString();
+
+    if (usageRecord) {
+      // Found usage_records entry - use it
+      currentUsage = usageRecord.screenshot_count ?? 0;
+      resetAt = usageRecord.period_end;
+    } else {
+      // Fallback to monthly_usage for existing users without usage_records
+      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM format
+      const { data: monthlyUsage, error: monthlyError } = await supabase
+        .from('monthly_usage')
+        .select('screenshot_count')
+        .eq('user_id', userId)
+        .eq('month', currentMonth)
+        .maybeSingle();
+
+      if (monthlyError) {
+        logger.error('Failed to fetch monthly usage', undefined, {
+          error: monthlyError,
+          userId,
+        });
+        throw monthlyError;
+      }
+
+      currentUsage = monthlyUsage?.screenshot_count ?? 0;
+    }
+
     const limit = planQuota.monthly_uploads;
 
     // Check if quota is exceeded
@@ -245,7 +275,7 @@ export async function checkUploadQuota(userId: string): Promise<QuotaCheckResult
       currentUsage,
       limit,
       plan,
-      resetAt: periodEnd.toISOString(),
+      resetAt,
     };
 
     if (!allowed) {
@@ -274,34 +304,38 @@ export async function checkUploadQuota(userId: string): Promise<QuotaCheckResult
  * Get usage statistics for a specific period
  *
  * Retrieves upload count, storage, and bandwidth usage for a billing period.
+ * Uses date range matching to find the usage record that contains the given date.
  *
  * @param userId - Supabase user ID
- * @param periodStart - Start of billing period (ISO timestamp)
+ * @param dateInPeriod - Any date within the billing period (ISO timestamp)
  * @returns Usage statistics or null if no data
  *
  * @example
  * ```typescript
- * const periodStart = new Date('2025-11-01').toISOString();
- * const usage = await getUsageForPeriod('user_123', periodStart);
+ * const usage = await getUsageForPeriod('user_123', new Date().toISOString());
  * console.log(`Uploads this period: ${usage?.screenshot_count || 0}`);
  * ```
  */
-export async function getUsageForPeriod(userId: string, periodStart: string) {
+export async function getUsageForPeriod(userId: string, dateInPeriod: string) {
   try {
     const supabase = createServiceClient();
 
+    // Use date range matching to find usage record containing the date
     const { data, error } = await supabase
       .from('usage_records')
       .select('*')
       .eq('user_id', userId)
-      .eq('period_start', periodStart)
-      .single();
+      .lte('period_start', dateInPeriod)
+      .gt('period_end', dateInPeriod)
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       logger.error('Failed to fetch usage for period', undefined, {
         error,
         userId,
-        periodStart,
+        dateInPeriod,
       });
       throw error;
     }
@@ -311,26 +345,23 @@ export async function getUsageForPeriod(userId: string, periodStart: string) {
     logger.error('Error fetching usage for period', undefined, {
       error,
       userId,
-      periodStart,
+      dateInPeriod,
     });
     throw error;
   }
 }
 
 /**
- * Get current month's usage record
+ * Get current period's usage record
  *
- * Helper to get usage for the current calendar month.
+ * Helper to get usage for the current billing period.
+ * Uses date range matching to find the active period.
  *
  * @param userId - Supabase user ID
- * @returns Current month's usage record or null
+ * @returns Current period's usage record or null
  */
 export async function getCurrentMonthUsage(userId: string) {
-  const periodStart = new Date();
-  periodStart.setDate(1);
-  periodStart.setHours(0, 0, 0, 0);
-
-  return getUsageForPeriod(userId, periodStart.toISOString());
+  return getUsageForPeriod(userId, new Date().toISOString());
 }
 
 /**
@@ -408,6 +439,7 @@ export async function resetMonthlyUsage(
  *
  * Increments the screenshot_count in the usage_records table.
  * Creates a new record if one doesn't exist for the current period.
+ * Uses date range matching to find the correct billing period.
  *
  * NOTE: This is typically handled automatically by database triggers,
  * but this function can be used for manual adjustments or corrections.
@@ -418,22 +450,18 @@ export async function resetMonthlyUsage(
 export async function incrementUploadCount(userId: string) {
   try {
     const supabase = createServiceClient();
+    const now = new Date();
 
-    // Get current period
-    const periodStart = new Date();
-    periodStart.setDate(1);
-    periodStart.setHours(0, 0, 0, 0);
-
-    const periodEnd = new Date(periodStart);
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-
-    // Check if usage record exists
+    // Try to find existing usage record using date range matching
     const { data: existing } = await supabase
       .from('usage_records')
       .select('*')
       .eq('user_id', userId)
-      .eq('period_start', periodStart.toISOString())
-      .single();
+      .lte('period_start', now.toISOString())
+      .gt('period_end', now.toISOString())
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (existing) {
       // Increment existing record
@@ -441,6 +469,7 @@ export async function incrementUploadCount(userId: string) {
         .from('usage_records')
         .update({
           screenshot_count: (existing.screenshot_count ?? 0) + 1,
+          updated_at: now.toISOString(),
         })
         .eq('id', existing.id)
         .select()
@@ -449,7 +478,15 @@ export async function incrementUploadCount(userId: string) {
       if (error) throw error;
       return data;
     } else {
-      // Create new record
+      // No usage_records entry found - create one for the current calendar month
+      // This handles free users who don't have subscription-aligned periods
+      const periodStart = new Date(now);
+      periodStart.setDate(1);
+      periodStart.setHours(0, 0, 0, 0);
+
+      const periodEnd = new Date(periodStart);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+
       const { data, error } = await supabase
         .from('usage_records')
         .insert({

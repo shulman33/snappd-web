@@ -878,7 +878,7 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
  * @param event - Stripe webhook event
  */
 export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
-  const invoice = event.data.object as Stripe.Invoice
+  const invoice = event.data.object as InvoiceWithOptionalFields
   const supabase = createServiceClient()
 
   logger.info('Processing invoice.payment_succeeded', undefined, {
@@ -1084,7 +1084,7 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
 
   // Get Stripe subscription ID
   const stripeSubscriptionId =
-    typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id
+    typeof invoiceSubscription === 'string' ? invoiceSubscription : invoiceSubscription?.id
 
   if (!stripeSubscriptionId) {
     logger.error('No subscription on failed invoice', undefined, { invoiceId: invoice.id })

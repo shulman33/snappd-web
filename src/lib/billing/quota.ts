@@ -122,12 +122,23 @@ export async function getUserPlan(userId: string): Promise<{
       subscription.status === 'trialing' ||
       (isPastDue && inGracePeriod);
 
+    // CRITICAL: Grace period expiration must be enforced first, regardless of scheduled downgrade.
+    // If past_due and grace period expired, user loses premium access immediately.
+    // This prevents users with scheduled downgrades from retaining premium features
+    // indefinitely when their payment fails and grace period expires.
+    if (!hasAccess) {
+      return {
+        plan: 'free',
+        subscriptionStatus: subscription.status,
+        isTrialing,
+        isPastDue,
+      };
+    }
+
     // T095-T096: If subscription is scheduled for downgrade (cancel_at_period_end=true),
-    // user maintains current plan privileges until current_period_end
-    // This ensures premium features remain accessible until the downgrade takes effect
+    // user maintains current plan privileges until current_period_end.
+    // This only applies when user still has access (active, trialing, or within grace period).
     if (subscription.cancel_at_period_end && currentPeriodEnd && now < currentPeriodEnd) {
-      // User has scheduled a downgrade but period hasn't ended yet
-      // Continue using current plan (premium access until period end)
       return {
         plan: subscription.plan_type as 'pro' | 'team',
         subscriptionStatus: subscription.status,
@@ -136,8 +147,9 @@ export async function getUserPlan(userId: string): Promise<{
       };
     }
 
+    // Normal case: user has access and no scheduled downgrade
     return {
-      plan: hasAccess ? (subscription.plan_type as 'pro' | 'team') : 'free',
+      plan: subscription.plan_type as 'pro' | 'team',
       subscriptionStatus: subscription.status,
       isTrialing,
       isPastDue,
